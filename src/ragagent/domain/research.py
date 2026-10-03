@@ -108,6 +108,8 @@ class AnswerDraft(BaseModel):
 
 class VerificationResponse(BaseModel):
     verdicts: list[ClaimVerdict]
+    question_answered: bool = False
+    missing_aspects: list[str] = Field(default_factory=list)
 
 
 class QueryExpansion(BaseModel):

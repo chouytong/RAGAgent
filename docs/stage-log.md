@@ -50,3 +50,18 @@ Limitations: semantic verification is model-based; score thresholds require
 calibration on human labels. Cross-encoder/model inference needs installed model
 extras and weights; integration tests intentionally use injected deterministic
 embeddings/reranker to verify real SQL independently of model quality.
+
+## Stage 4 — typed LangGraph workflows
+
+Changed: typed RAG/MultiAgent states and updates, structured plan/subtask/analysis
+contracts, current StateGraph builders, Supervisor policy, query-expansion and
+revision/refusal paths, deterministic report synthesis, graph/regression tests
+and agent architecture documentation.
+
+Checks: Ruff format/lint, strict mypy; 23 tests including known-query citation
+regression, real PostgreSQL graph execution with scripted LLMs, all reviewer
+routes, preserved user filters, retrieval exhaustion and iteration termination.
+
+Limitations: Supervisor task/aspect quality and semantic verdicts depend on
+configured models. Contradictions force bounded revision/refusal. Test scripts
+validate execution contracts, not scientific reasoning quality.
