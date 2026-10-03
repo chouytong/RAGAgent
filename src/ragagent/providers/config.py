@@ -2,6 +2,7 @@ import os
 import re
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -19,6 +20,17 @@ class AgentModel(BaseModel):
     def local_base(self) -> "AgentModel":
         if self.provider == "openai_compatible" and not self.api_base:
             raise ValueError("api_base required for compatible provider")
+        if self.api_base:
+            url = urlsplit(self.api_base)
+            if (
+                url.scheme not in {"http", "https"}
+                or not url.hostname
+                or url.username
+                or url.password
+                or url.query
+                or url.fragment
+            ):
+                raise ValueError("api_base_must_not_contain_credentials_or_query")
         if "${" in self.model:
             raise ValueError("unresolved_model_environment")
         return self
