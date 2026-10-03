@@ -1,0 +1,65 @@
+{
+  "langchain-ai/rag-research-agent-template": {
+    "url": "https://github.com/langchain-ai/rag-research-agent-template",
+    "pushed_at": "2024-12-03T14:41:47Z",
+    "archived": true,
+    "license": "MIT",
+    "default_branch": "main"
+  },
+  "The-Name-is-Karthik/ResearchPaL": {
+    "url": "https://github.com/The-Name-is-Karthik/ResearchPaL",
+    "pushed_at": "2026-07-28T19:15:59Z",
+    "archived": false,
+    "license": null,
+    "default_branch": "main"
+  },
+  "saumyajain03/agenticArxiv": {
+    "url": "https://github.com/saumyajain03/agenticArxiv",
+    "pushed_at": "2026-08-03T05:31:48Z",
+    "archived": false,
+    "license": null,
+    "default_branch": "main"
+  },
+  "littlelelephant/literature-review-agent": {
+    "url": "https://github.com/littlelelephant/literature-review-agent",
+    "pushed_at": "2026-08-02T14:04:49Z",
+    "archived": false,
+    "license": "AGPL-3.0",
+    "default_branch": "main"
+  },
+  "langchain-ai/langgraph-supervisor-py": {
+    "url": "https://github.com/langchain-ai/langgraph-supervisor-py",
+    "pushed_at": "2026-07-15T06:32:54Z",
+    "archived": true,
+    "license": "MIT",
+    "default_branch": "main"
+  },
+  "docling-project/docling": {
+    "url": "https://github.com/docling-project/docling",
+    "pushed_at": "2026-10-03T12:20:36Z",
+    "archived": false,
+    "license": "MIT",
+    "default_branch": "main"
+  },
+  "pgvector/pgvector": {
+    "url": "https://github.com/pgvector/pgvector",
+    "pushed_at": "2026-10-01T17:26:54Z",
+    "archived": false,
+    "license": "NOASSERTION",
+    "default_branch": "master"
+  },
+  "BerriAI/litellm": {
+    "url": "https://github.com/BerriAI/litellm",
+    "pushed_at": "2026-10-03T13:10:10Z",
+    "archived": false,
+    "license": "NOASSERTION",
+    "default_branch": "main"
+  },
+  "langchain-ai/langgraph": {
+    "url": "https://github.com/langchain-ai/langgraph",
+    "pushed_at": "2026-10-03T12:56:04Z",
+    "archived": false,
+    "license": "MIT",
+    "default_branch": "main"
+  }
+}
