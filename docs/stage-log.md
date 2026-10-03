@@ -63,7 +63,8 @@ regression, real PostgreSQL graph execution with scripted LLMs, all reviewer
 routes, preserved user filters, retrieval exhaustion and iteration termination.
 
 Limitations: Supervisor task/aspect quality and semantic verdicts depend on
-configured models. Contradictions force bounded revision/refusal. Test scripts
+configured models. Unsupported contradictions force bounded revision/refusal;
+supported conflicting findings can be reported with evidence. Test scripts
 validate execution contracts, not scientific reasoning quality.
 
 ## Stage 5 — jobs, API, SSE and UI
@@ -80,3 +81,41 @@ Limitations: trusted local single-user deployment; model caches/provider keys
 must be configured for inference. Worker restart/resumption is explicit via retry;
 SSE events persist but automatic graph checkpoint resumption is not claimed.
 Evaluation UI has no canned numbers; actual runner/API added only in stage 6.
+
+## Stage 6 — evaluation, deployment and final verification
+
+Changed: real retrieval/RAG/multi-agent evaluation runners and API/artifact
+downloads; annotation schema, 100 unannotated forms and explicitly synthetic
+pipeline dataset/corpus tool; evaluation UI metrics; Dockerfiles, Compose,
+optional cloud CA overlay, environment example, Makefile and GitHub Actions;
+README/evaluation/deployment documentation. Hardened ingestion ownership and
+worker interruption handling, indexing progress, section descendant filters,
+empty-index retrieval, all structured factual-claim verification, bounded
+Supervisor replanning, nonsecret error codes and UI event reconnection.
+
+Checks on 2026-10-03: Ruff format/lint, strict mypy (49 source files), 48 passing
+pytest unit/integration/regression tests with real PostgreSQL 17/pgvector;
+Alembic schema check and downgrade/upgrade round trip on the test database;
+frontend Prettier, TypeScript check and production build; git diff whitespace
+check. No paid APIs or model downloads are needed by these core tests.
+
+Latest Docker images built successfully with the documented cloud CA overlay;
+Compose migration/API/worker/Redis/PostgreSQL/frontend startup passed. Actual
+Redis/RQ execution, sanitized provider_key_missing failure, terminal SSE replay,
+empty-index search without model loading, invalid evaluation corpus references
+and frontend HTTP were verified. Chromium opened all five UI pages with no
+script errors. Docling/embedding/reranker packages are installed in the image;
+this is not a claim that weight-backed inference or PDF model parsing ran.
+The backend installs dependencies and clears caches in one layer to avoid
+duplicating large model dependencies on VFS Docker builders.
+
+Limitations: no real 100-query human-labeled benchmark, no claimed improvement
+metrics, no paid provider inference or downloaded-weight inference verified in
+this restricted cloud environment. Actual arXiv import and model parsing require
+approved network access/caches; configured provider credentials or local models
+are required for chat. Semantic evaluation remains model-based and requires
+human validation. Trusted local single-user deployment, English FTS, exact
+vector search and explicit retry after worker failure remain V1 boundaries.
+GitHub Actions configuration is committed; local checks above do not assert a
+GitHub-hosted workflow result. The six review branches are sequential PRs and
+are intentionally not merged automatically.

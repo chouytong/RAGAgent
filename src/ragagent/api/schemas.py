@@ -18,7 +18,7 @@ class ResearchRequest(BaseModel):
 
 
 class ArxivRequest(BaseModel):
-    arxiv_id: str = Field(pattern=ARXIV_ID.pattern)
+    arxiv_id: str = Field(pattern="^" + ARXIV_ID.pattern + "$")
 
 
 class RunResponse(BaseModel):
@@ -55,3 +55,10 @@ class HealthResult(BaseModel):
 
 class ProviderTest(BaseModel):
     agent: str = Field(pattern="^(supervisor|retriever|analyst|reviewer)$")
+
+
+class PaperPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=1000)
+    authors: list[str] | None = Field(default=None, max_length=100)
+    year: int | None = Field(default=None, ge=1000, le=2100)
+    venue: str | None = Field(default=None, max_length=256)

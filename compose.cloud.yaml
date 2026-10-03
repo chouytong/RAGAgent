@@ -1,0 +1,32 @@
+# Optional managed-cloud proxy CA overlay. Normal local users need only compose.yaml.
+services:
+  migrate:
+    build:
+      secrets: [proxy_ca]
+    volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/run/proxy-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /run/proxy-ca.pem
+      REQUESTS_CA_BUNDLE: /run/proxy-ca.pem
+  api:
+    build:
+      secrets: [proxy_ca]
+    volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/run/proxy-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /run/proxy-ca.pem
+      REQUESTS_CA_BUNDLE: /run/proxy-ca.pem
+  worker:
+    build:
+      secrets: [proxy_ca]
+    volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/run/proxy-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /run/proxy-ca.pem
+      REQUESTS_CA_BUNDLE: /run/proxy-ca.pem
+  frontend:
+    build:
+      secrets: [proxy_ca]
+secrets:
+  proxy_ca:
+    file: /etc/ssl/certs/ca-certificates.crt

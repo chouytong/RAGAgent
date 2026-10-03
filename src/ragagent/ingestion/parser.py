@@ -12,13 +12,13 @@ class Parser(Protocol):
 class DoclingParser:
     def parse(self, path: Path) -> ParsedDocument:
         # Lazy import: core tests do not install or download layout/OCR models.
-        from docling.document_converter import DocumentConverter
-
         try:
+            from docling.document_converter import DocumentConverter
+
             document = DocumentConverter().convert(path).document
             elements: list[Element] = []
             headings: list[str] = []
-            for item, _level in document.iterate_items():
+            for item, _level in document.iterate_items(traverse_pictures=True):
                 label = str(getattr(item.label, "value", item.label))
                 if label == "section_header":
                     depth = max(1, int(getattr(item, "level", 1)))

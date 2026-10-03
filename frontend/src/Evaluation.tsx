@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import { Run, api } from "./api";
 import { Json } from "./components";
 export function Evaluation() {
   const [dataset, setDataset] = useState(""),
     [run, setRun] = useState<Run | null>(null),
     [error, setError] = useState("");
+  const summary = z
+    .record(z.string(), z.record(z.string(), z.number().nullable()))
+    .safeParse(run?.result?.summary);
   const id = run?.id;
   useEffect(() => {
     if (!id) return;
@@ -70,7 +74,38 @@ export function Evaluation() {
             状态：{run.status}
             {run.error_code && ` · ${run.error_code}`}
           </p>
-          <Json value={run.result} />
+          {summary.success && (
+            <table>
+              <thead>
+                <tr>
+                  <th>模式</th>
+                  {Object.keys(Object.values(summary.data)[0] ?? {}).map(
+                    (k) => (
+                      <th key={k}>{k}</th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(summary.data).map(([mode, metrics]) => (
+                  <tr key={mode}>
+                    <td>{mode}</td>
+                    {Object.entries(metrics).map(([k, v]) => (
+                      <td key={k}>
+                        {v === null
+                          ? "N/A"
+                          : v.toFixed(k === "latency_ms" ? 2 : 4)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <details>
+            <summary>完整结果及 provenance</summary>
+            <Json value={run.result} />
+          </details>
           {run.status === "completed" && (
             <p>
               <a href={`/api/evaluations/${run.id}/results.json`}>

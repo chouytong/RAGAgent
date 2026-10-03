@@ -24,10 +24,10 @@ it uses the configured retriever model for expansion. Analysis returns linked
 claims and structured comparisons/contradictions. Report synthesis adds no
 LLM-generated prose. Reviewer verifies existence, spans, semantic support and
 required aspect coverage; it cannot pass an unsupported claim by assessing style.
-Contradictions force revision. User metadata restrictions override planner
+Unsupported or conflicting claim/evidence pairs force revision; supported contradictory findings can be reported with both citations. User metadata restrictions override planner
 proposals and survive expansion. Evidence is unioned/deduplicated across retries.
 
-Each retrieval round and analysis/review iteration advances counters. Explicit
+Supervisor replans missing aspects from reviewer feedback while retaining prior required aspects. Each replan, retrieval round and analysis/review iteration advances counters. Explicit
 retrieval/revision/iteration limits stop retries; runtime recursion_limit is an
 additional guard. Research counts rounds separately from total retrieval queries.
 Task completion means retrieval found task evidence; report completion additionally

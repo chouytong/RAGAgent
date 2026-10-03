@@ -2,6 +2,7 @@ from typing import Protocol
 
 from redis import Redis
 from rq import Queue
+from rq.job import Callback
 
 from ragagent.settings import get_settings
 
@@ -20,6 +21,7 @@ class RQQueue:
             job_timeout=1800,
             result_ttl=0,
             failure_ttl=86400,
+            on_failure=Callback("ragagent.worker.on_failure"),
         )
 
 

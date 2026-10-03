@@ -82,6 +82,7 @@ def events(
         raise HTTPException(422, "invalid_event_cursor") from None
     if cursor < 0:
         raise HTTPException(422, "invalid_event_cursor")
+    db.rollback()  # Release the request session connection before the long-lived stream.
     return StreamingResponse(
         stream_events(run_id, request, cursor),
         media_type="text/event-stream",

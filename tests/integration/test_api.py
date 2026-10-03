@@ -49,6 +49,9 @@ def test_upload_dedup_metadata_invalid_pdf(client: TestClient) -> None:
     paper_id = client.get("/api/papers").json()[0]["id"]
     paper = client.get("/api/papers/" + paper_id).json()
     assert paper["authors"] == ["Alice", "Bob"] and paper["status"] == "queued"
+    changed = client.patch("/api/papers/" + paper_id, json={"authors": ["Carol"], "year": 2025})
+    assert changed.status_code == 200 and changed.json()["authors"] == ["Carol"]
+    assert changed.json()["year"] == 2025
     duplicate = client.post(
         "/api/papers/upload", files={"file": ("paper.pdf", b"%PDF-1.4 fixture", "application/pdf")}
     )

@@ -76,6 +76,21 @@ class AnalysisResult(BaseModel):
     contradictions: list[Claim] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
 
+    def factual_claims(self) -> list[Claim]:
+        by_id: dict[str, Claim] = {}
+        for claim in (
+            self.claims + self.methods + self.datasets + self.metrics + self.contradictions
+        ):
+            if claim.claim_id in by_id and by_id[claim.claim_id] != claim:
+                raise ValueError("conflicting_claim_id")
+            by_id[claim.claim_id] = claim
+        return list(by_id.values())
+
+    @model_validator(mode="after")
+    def consistent_claim_ids(self) -> "AnalysisResult":
+        self.factual_claims()
+        return self
+
 
 class ReviewResult(BaseModel):
     decision: str = Field(pattern="^(PASS|NEED_MORE_EVIDENCE|NEED_REVISION)$")

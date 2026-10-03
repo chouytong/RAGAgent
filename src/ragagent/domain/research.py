@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, FiniteFloat, model_validator
 
 
 class MetadataFilter(BaseModel):
@@ -51,12 +51,12 @@ class EvidenceRecord(BaseModel):
     quote: str
     span_start: int
     span_end: int
-    scores: dict[str, float] = Field(default_factory=dict)
+    scores: dict[str, FiniteFloat] = Field(default_factory=dict)
 
 
 class Candidate(BaseModel):
     evidence: EvidenceRecord
-    score: float
+    score: FiniteFloat
 
 
 class SearchResult(BaseModel):

@@ -25,8 +25,7 @@ flowchart LR
 Production defaults use local sentence-transformer embeddings and cross encoder,
 Docling and a configurable chat mapping. Models download at first use and can
 be pre-cached for offline operation. No mock provider is silently used when a
-real provider fails. The empty database is a valid startup state; it must refuse
-questions that have no evidence.
+real provider fails. The empty database is a valid startup state; with configured providers it refuses questions that have no evidence. Missing provider credentials return an explicit configuration error.
 
 Paper ingestion commits parsed sections, chunks and embeddings atomically.
 The uploaded original PDF and structured parse JSON are retained on a named

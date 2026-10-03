@@ -21,11 +21,13 @@ from ragagent.ingestion.arxiv import download_arxiv
 from ragagent.ingestion.chunker import StructureChunker
 from ragagent.ingestion.parser import DoclingParser
 from ragagent.ingestion.service import ingest
+from ragagent.observability import configure_logging
 from ragagent.retrieval.service import HybridRetriever
 from ragagent.runtime import make_agents, make_embedder, make_reranker
 from ragagent.settings import get_settings
 
 T = TypeVar("T", bound=BaseModel)
+configure_logging()
 logger = logging.getLogger("ragagent.worker")
 
 
@@ -69,7 +71,7 @@ async def arxiv_ingestion(session: Session, run: Run) -> Paper:
             source_url=metadata.source_url,
             sha256=sha,
             original_path=str(path),
-            status="parsing",
+            status="queued",
         )
         session.add(paper)
         session.flush()
@@ -99,6 +101,7 @@ async def execute_async(run_id: str) -> None:
         run.status = "running"
         event(session, run, "started", {"trace_id": run.trace_id, "kind": run.kind})
         paper: Paper | None = None
+        owns_ingestion = False
         try:
             if run.kind in {"ingestion", "arxiv"}:
                 paper = (
@@ -108,8 +111,25 @@ async def execute_async(run_id: str) -> None:
                 )
                 if paper is None:
                     raise ValueError("paper_not_found")
-                paper.status = "parsing"
-                event(session, run, "parsing", {"paper_id": paper.id})
+                paper = session.scalar(
+                    select(Paper)
+                    .where(Paper.id == paper.id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+                assert paper is not None
+                if paper.embedding_model is None:
+                    if paper.status not in {"queued", "failed"}:
+                        raise ApplicationError("paper_already_processing")
+                    owns_ingestion = True
+                    paper.status = "parsing"
+                    event(session, run, "parsing", {"paper_id": paper.id})
+
+                def ingestion_progress(status: str) -> None:
+                    assert paper is not None
+                    paper.status = status
+                    event(session, run, status, {"paper_id": paper.id})
+
                 if paper.embedding_model is None:
                     await ingest(
                         session,
@@ -119,6 +139,7 @@ async def execute_async(run_id: str) -> None:
                             settings.chunk_target_tokens, settings.chunk_overlap_tokens
                         ),
                         make_embedder(settings),
+                        ingestion_progress,
                     )
                 paper.status = "indexed"
                 run.result = {"paper_id": paper.id}
@@ -142,6 +163,7 @@ async def execute_async(run_id: str) -> None:
                         agents["analyst"],
                         agents["reviewer"],
                         settings.max_retrieval_retries,
+                        settings.minimum_rerank_score,
                     )
                     state = await graph_events(
                         graph, RAGState(**run.request, trace_id=run.trace_id), session, run, 100
@@ -160,7 +182,11 @@ async def execute_async(run_id: str) -> None:
                     )
                     research = await graph_events(
                         research_graph,
-                        MultiAgentState(**run.request, trace_id=run.trace_id),
+                        MultiAgentState(
+                            **run.request,
+                            trace_id=run.trace_id,
+                            trace_metadata={"run_id": run.id, "workflow": "research-v1"},
+                        ),
                         session,
                         run,
                         300,
@@ -175,6 +201,48 @@ async def execute_async(run_id: str) -> None:
                     for name, p in agents.items()
                 }
                 session.commit()
+            elif run.kind.startswith("eval_"):
+                from ragagent.evaluation.generation import evaluate_generation
+                from ragagent.evaluation.retrieval import evaluate_retrieval
+                from ragagent.evaluation.schema import EvaluationDataset
+                from ragagent.evaluation.validation import validate_references
+                from ragagent.providers.chat import LiteLLMProvider
+                from ragagent.providers.config import load_config
+
+                dataset = EvaluationDataset.model_validate(run.request["dataset"])
+                validate_references(dataset, session)
+                search = HybridRetriever(
+                    session,
+                    make_embedder(settings),
+                    make_reranker(settings),
+                    settings.candidate_top_n,
+                    settings.evidence_top_k,
+                    settings.rrf_k,
+                )
+                directory = settings.data_dir / "evaluations" / run.id
+                if run.kind == "eval_retrieval":
+                    run.result = await evaluate_retrieval(
+                        dataset, search, session, settings, directory
+                    )
+                elif run.kind in {"eval_rag", "eval_multi_agent"}:
+                    agents = make_agents(settings)
+                    judge = LiteLLMProvider(
+                        load_config(settings.agent_config).agents.reviewer,
+                        settings.provider_timeout,
+                    )
+                    run.result = await evaluate_generation(
+                        dataset,
+                        search,
+                        agents,
+                        judge,
+                        settings,
+                        directory,
+                        multi_agent=run.kind == "eval_multi_agent",
+                    )
+                else:
+                    raise ValueError("unknown_evaluation_kind")
+                run.status = "completed"
+                session.commit()
             else:
                 raise ValueError("unknown_job_kind")
             event(session, run, "finished", {"status": run.status})
@@ -182,7 +250,7 @@ async def execute_async(run_id: str) -> None:
             session.rollback()
             code = exc.code if isinstance(exc, ApplicationError) else "job_failed"
             run.status, run.error_code = "failed", code
-            if paper is not None:
+            if paper is not None and owns_ingestion:
                 paper.status, paper.error_code = "failed", code
             event(session, run, "failed", {"error_code": code, "trace_id": run.trace_id})
             logger.error("job_failed", extra={"trace_id": run.trace_id, "error_code": code})
@@ -197,6 +265,34 @@ def execute(run_id: str) -> None:
 def main() -> None:
     connection = Redis.from_url(get_settings().redis_url.get_secret_value())
     Worker([Queue("research", connection=connection)], connection=connection).work()
+
+
+def on_failure(job: Any, connection: Any, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+    """Persist process interruption without storing raw exception text or prompts."""
+    try:
+        with session_factory()() as session:
+            run = session.get(Run, job.id)
+            if run is None or run.status in {"completed", "insufficient_evidence", "failed"}:
+                return
+            run.status, run.error_code = "failed", "worker_interrupted"
+            parsing = session.scalar(
+                select(ExecutionEvent)
+                .where(ExecutionEvent.run_id == run.id, ExecutionEvent.node == "parsing")
+                .order_by(ExecutionEvent.id.desc())
+            )
+            if parsing:
+                paper = session.get(Paper, parsing.payload.get("paper_id"))
+                if paper and paper.status in {"parsing", "indexing"}:
+                    paper.status, paper.error_code = "failed", "worker_interrupted"
+            event(
+                session,
+                run,
+                "failed",
+                {"error_code": "worker_interrupted", "trace_id": run.trace_id},
+            )
+            logger.error("worker_interrupted", extra={"trace_id": run.trace_id})
+    except Exception:
+        raise ApplicationError("failure_recording_failed") from None
 
 
 if __name__ == "__main__":

@@ -138,7 +138,7 @@ async def test_research_more_evidence_and_refusal() -> None:
     search = Search(empty_rounds=1)
     graph = build_research(
         search,
-        MockProvider([plan()]),
+        MockProvider([plan(), plan()]),
         MockProvider([QueryExpansion(queries=["expanded"])]),
         MockProvider([AnalysisResult(claims=claims())]),
         MockProvider([verdict()]),

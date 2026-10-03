@@ -9,6 +9,7 @@ until run status=completed. Failure responses carry safe error codes.
 
 - POST `/api/papers/upload`: multipart file, title, authors (semicolon-separated), year, venue. Bounded PDF upload, content-hash deduplication.
 - POST `/api/papers/arxiv`: `{arxiv_id}` only; arbitrary URLs are rejected.
+- PATCH `/api/papers/{id}`: validated metadata corrections (title/authors/year/venue).
 - GET `/api/papers` and `/api/papers/{id}`: metadata, parsing/index status, chunk count.
 - GET `/api/papers/{id}/pdf` and `/chunks`: original PDF and exact chunk text for traceability/annotation.
 - POST `/api/papers/{id}/retry`: retry failed/queued ingestion after correcting runtime configuration.
@@ -20,9 +21,10 @@ until run status=completed. Failure responses carry safe error codes.
 - GET/PUT `/api/providers`: nonsecret agent provider/model mapping. Only environment variable names, never key values.
 - POST `/api/providers/test`: `{agent}` connectivity test via unified provider. This invokes the selected model and may incur API charges.
 
-Evaluation routes are added in stage 6 after real evaluation runners exist.
-The Evaluation UI is wired for those routes; it does not display fabricated
-results during this intermediate stage.
+- POST `/api/evaluations/retrieval`, `/rag`, `/multi-agent`: `{dataset}` queues actual evaluation runners.
+- GET `/api/evaluations/{id}/results.json` and `/results.md`: provenance and measured outputs.
+
+Evaluation rejects unannotated/invalid relevance IDs. Semantic judgments are model-based and record the judge configuration.
 
 Local deployment is single-user; bind frontend/API to localhost. No key is
 returned by provider settings. A public or shared deployment requires a separate

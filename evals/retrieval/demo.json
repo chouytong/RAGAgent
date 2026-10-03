@@ -1,0 +1,6 @@
+{
+  "dataset_id": "synthetic-pipeline-check-v1",
+  "label_source": "synthetic",
+  "description": "DEMO ONLY / NOT A BENCHMARK / NOT MANUALLY ANNOTATED. Requires matching seeded synthetic corpus; unknown chunk IDs cause an error.",
+  "cases": [{"id": "demo-1", "query": "contrastive training retrieval", "question_type": "fact", "filters": {}, "relevant_chunk_ids": ["11111111-1111-4111-8111-111111111111"], "relevant_paper_ids": ["22222222-2222-4222-8222-222222222222"], "expected_answer": "The synthetic paper says contrastive training is used for retrieval.", "required_aspects": ["method"], "notes": "Artificial text and labels; not a research benchmark."}]
+}

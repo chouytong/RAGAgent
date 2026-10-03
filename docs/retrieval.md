@@ -10,7 +10,7 @@ RRF adds `1/(k + rank)` per unique chunk per ranking, then selects candidate
 N. CrossEncoder predicts query/chunk pairs and ranks evidence K. Dense, lexical,
 fused candidates and reranked evidence are returned independently. Within-list
 duplicates cannot inflate RRF. Expanded queries contribute independent rankings.
-Filters include paper IDs, authors, year bounds, venues, sections, entity types,
+Section filters match full paths and their descendants or exact headings. Filters include paper IDs, authors, year bounds, venues, sections, entity types,
 datasets, methods and metrics. Lists are OR within a field and fields are AND.
 Entity matching requires recorded chunk annotations, not guessing from memory.
 

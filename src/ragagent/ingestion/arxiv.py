@@ -22,7 +22,7 @@ class ArxivMetadata:
 async def download_arxiv(arxiv_id: str, path: Path, max_bytes: int) -> ArxivMetadata:
     if not ARXIV_ID.fullmatch(arxiv_id):
         raise ValueError("invalid_arxiv_id")
-    async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
         response = await client.get(
             "https://export.arxiv.org/api/query", params={"id_list": arxiv_id}
         )

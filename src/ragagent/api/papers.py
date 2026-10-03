@@ -3,12 +3,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ragagent.api.dependencies import get_db
 from ragagent.api.queue import JobQueue, get_queue
-from ragagent.api.schemas import ArxivRequest, EntityAnnotation, PaperResponse, RunResponse
+from ragagent.api.schemas import (
+    ArxivRequest,
+    EntityAnnotation,
+    PaperPatch,
+    PaperResponse,
+    RunResponse,
+)
 from ragagent.db.models import (
     Author,
     Chunk,
@@ -233,3 +239,29 @@ def retry_ingestion(paper_id: str, db: DB, queue: QueueDep) -> RunResponse:
         raise HTTPException(409, "paper_not_retryable")
     paper.status, paper.error_code = "queued", None
     return RunResponse.model_validate(enqueue(db, queue, "ingestion", {"paper_id": paper.id}))
+
+
+@router.patch("/{paper_id}")
+def update_metadata(paper_id: str, request: PaperPatch, db: DB) -> PaperResponse:
+    paper = db.get(Paper, paper_id)
+    if paper is None:
+        raise HTTPException(404, "paper_not_found")
+    if "title" in request.model_fields_set and request.title is None:
+        raise HTTPException(422, "title_cannot_be_null")
+    for field in ["title", "year", "venue"]:
+        if field in request.model_fields_set:
+            setattr(paper, field, getattr(request, field))
+    if "authors" in request.model_fields_set:
+        names = list(dict.fromkeys(n.strip() for n in request.authors or []))
+        if any(not n or len(n) > 256 for n in names):
+            raise HTTPException(422, "invalid_author_name")
+        db.execute(delete(PaperAuthor).where(PaperAuthor.paper_id == paper.id))
+        for position, name in enumerate(names):
+            author = db.scalar(select(Author).where(Author.name == name))
+            if author is None:
+                author = Author(name=name)
+                db.add(author)
+                db.flush()
+            db.add(PaperAuthor(paper_id=paper.id, author_id=author.id, position=position))
+    db.commit()
+    return paper_response(db, paper)

@@ -1,7 +1,7 @@
 import uuid
 from typing import Protocol
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
 from ragagent.db.models import Author, Chunk, Evidence, Paper, PaperAuthor
@@ -58,6 +58,15 @@ class DenseRetriever:
         self.session, self.embedder = session, embedder
 
     async def search(self, query: str, filters: MetadataFilter, top_n: int) -> list[Candidate]:
+        # Apply metadata restrictions before loading or calling an embedding model.
+        probe = (
+            select(Chunk, Paper, literal(0.0))
+            .join(Paper)
+            .where(Paper.status == "indexed", Paper.embedding_model == self.embedder.fingerprint)
+        )
+        probe = apply_filters(probe, filters)
+        if self.session.scalar(probe.with_only_columns(Chunk.id).limit(1)) is None:
+            return []
         vector = (await self.embedder.embed([query]))[0]
         distance = Chunk.embedding.cosine_distance(vector)
         statement = (

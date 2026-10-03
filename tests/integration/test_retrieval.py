@@ -104,3 +104,63 @@ async def test_real_vector_fts_hybrid_and_all_filters(empty_db: Session) -> None
         QueryPlan(queries=["contrastive"], filters=MetadataFilter(datasets=["absent"]))
     )
     assert not absent.dense and not absent.lexical and not absent.evidence
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "filters",
+    [
+        MetadataFilter(paper_ids=["absent"]),
+        MetadataFilter(authors=["Nobody"]),
+        MetadataFilter(year_start=2025),
+        MetadataFilter(year_end=2019),
+        MetadataFilter(venues=["absent"]),
+        MetadataFilter(sections=["absent"]),
+        MetadataFilter(entity_types=["absent"]),
+        MetadataFilter(datasets=["absent"]),
+        MetadataFilter(methods=["absent"]),
+        MetadataFilter(metrics=["absent"]),
+    ],
+)
+async def test_each_filter_excludes_both_retrievers(
+    empty_db: Session, filters: MetadataFilter
+) -> None:
+    populate(empty_db)
+    retriever = HybridRetriever(empty_db, Embedder(), FixtureReranker())
+    result = await retriever.search(QueryPlan(queries=["contrastive"], filters=filters))
+    assert not result.dense and not result.lexical
+
+
+@pytest.mark.integration
+async def test_parent_section_filter_includes_child_path(empty_db: Session) -> None:
+    pid, cid = populate(empty_db)
+    c = empty_db.get(Chunk, cid)
+    assert c is not None
+    parent_id = c.section_id
+    child = Section(
+        paper_id=pid, parent_id=parent_id, title="Training", path="Methods / Training", ordinal=1
+    )
+    empty_db.add(child)
+    empty_db.flush()
+    c.section_id, c.section_path = child.id, child.path
+    empty_db.flush()
+    result = await HybridRetriever(empty_db, Embedder(), FixtureReranker()).search(
+        QueryPlan(
+            queries=["contrastive"], filters=MetadataFilter(paper_ids=[pid], sections=["methods"])
+        )
+    )
+    assert result.evidence and result.evidence[0].chunk_id == cid
+
+
+@pytest.mark.integration
+async def test_empty_corpus_does_not_call_model(empty_db: Session) -> None:
+    class NoModel:
+        fingerprint = "test:384"
+
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            raise AssertionError("empty corpus must not call embedding provider")
+
+    result = await HybridRetriever(empty_db, NoModel(), FixtureReranker()).search(
+        QueryPlan(queries=["q"])
+    )
+    assert not result.dense and not result.lexical and not result.evidence

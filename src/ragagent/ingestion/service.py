@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
 
 from sqlalchemy import select
@@ -11,7 +12,12 @@ from ragagent.providers.ports import Embedder
 
 
 async def ingest(
-    session: Session, paper: Paper, parser: Parser, chunker: StructureChunker, embedder: Embedder
+    session: Session,
+    paper: Paper,
+    parser: Parser,
+    chunker: StructureChunker,
+    embedder: Embedder,
+    progress: Callable[[str], None] | None = None,
 ) -> None:
     if session.scalar(select(Chunk.id).where(Chunk.paper_id == paper.id).limit(1)):
         raise ValueError("paper_already_indexed")
@@ -19,6 +25,8 @@ async def ingest(
     drafts = chunker.chunk(document)
     if not drafts:
         raise ValueError("empty_document")
+    if progress is not None:
+        progress("indexing")
     vectors = await embedder.embed([chunk.content for chunk in drafts])
     if len(vectors) != len(drafts):
         raise ValueError("embedding_count_mismatch")

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     chunk_overlap_tokens: int = Field(default=50, ge=0)
     candidate_top_n: int = Field(default=30, ge=1, le=200)
     evidence_top_k: int = Field(default=8, ge=1, le=50)
+    minimum_rerank_score: float = Field(default=0.0, allow_inf_nan=False)
     rrf_k: int = Field(default=60, ge=1)
     max_retrieval_retries: int = Field(default=2, ge=0, le=5)
     max_revisions: int = Field(default=2, ge=0, le=5)

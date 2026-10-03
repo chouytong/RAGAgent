@@ -69,3 +69,27 @@ def test_gate_diversity_and_citations() -> None:
     )
     claim = Claim(claim_id="c", text="Fact", evidence_ids=[evidence().evidence_id])
     assert parse_citations(render_claims([claim])) == claim.evidence_ids
+
+
+async def test_supported_flag_cannot_override_contradiction() -> None:
+    e = evidence()
+    claim = Claim(
+        claim_id="c",
+        text="All methods are identical",
+        evidence_ids=[e.evidence_id],
+        aspect="method",
+    )
+    provider = MockProvider(
+        [
+            VerificationResponse(
+                question_answered=True,
+                verdicts=[
+                    ClaimVerdict(
+                        claim_id="c", supported=True, contradiction=True, reason="contradicted"
+                    )
+                ],
+            )
+        ]
+    )
+    result = await verify_claims([claim], [e], ["method"], provider, question="Compare methods")
+    assert not result.valid and result.missing_aspects == ["method"]
