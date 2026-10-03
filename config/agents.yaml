@@ -1,0 +1,13 @@
+agents:
+  supervisor:
+    provider: openai
+    model: ${SUPERVISOR_MODEL:-gpt-4.1-mini}
+  retriever:
+    provider: openai
+    model: ${RETRIEVER_MODEL:-gpt-4.1-mini}
+  analyst:
+    provider: openai
+    model: ${ANALYSIS_MODEL:-gpt-4.1-mini}
+  reviewer:
+    provider: openai
+    model: ${REVIEWER_MODEL:-gpt-4.1-mini}

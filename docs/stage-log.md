@@ -32,3 +32,21 @@ Limitations: chunk token counts are reproducible lexical counts, not model
 BPE counts; mathematical extraction depends on Docling recognition; arXiv
 network access and actual Docling model parsing require model/network-enabled
 runtime and are not asserted by fixtures. First migration freezes 384 dimensions.
+
+## Stage 3 — retrieval, providers and evidence
+
+Changed: typed query/filter/evidence/claim schemas; filtered DenseRetriever and
+PostgreSQL FTS LexicalRetriever; RRFusion/HybridRetriever; lazy cross encoder;
+independent local/LiteLLM embedding adapters; unified chat/config/mock providers;
+exact-span and semantic claim verifier; evidence gate; citation parser/renderer;
+provider mapping config and retrieval documentation/tests.
+
+Checks: Ruff format/lint, strict mypy; 13 unit/integration tests on real
+PostgreSQL/pgvector. All metadata filters exercised together, and absent dataset
+filter returns no dense or lexical rows. Citation/spans, verifier omissions,
+evidence diversity and provider secret-name validation are tested without APIs.
+
+Limitations: semantic verification is model-based; score thresholds require
+calibration on human labels. Cross-encoder/model inference needs installed model
+extras and weights; integration tests intentionally use injected deterministic
+embeddings/reranker to verify real SQL independently of model quality.
