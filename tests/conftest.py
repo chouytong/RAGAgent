@@ -14,7 +14,7 @@ def db() -> Iterator[Session]:
     engine = create_engine(url)
     with engine.connect() as connection:
         transaction = connection.begin()
-        with Session(bind=connection) as session:
+        with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
             yield session
         transaction.rollback()
     engine.dispose()

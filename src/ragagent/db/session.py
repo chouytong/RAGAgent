@@ -8,7 +8,9 @@ from ragagent.settings import get_settings
 
 @lru_cache
 def engine() -> Engine:
-    return create_engine(get_settings().database_url.get_secret_value(), pool_pre_ping=True)
+    return create_engine(
+        get_settings().database_url.get_secret_value(), pool_pre_ping=True, hide_parameters=True
+    )
 
 
 def session_factory() -> sessionmaker[Session]:

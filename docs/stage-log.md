@@ -65,3 +65,18 @@ routes, preserved user filters, retrieval exhaustion and iteration termination.
 Limitations: Supervisor task/aspect quality and semantic verdicts depend on
 configured models. Contradictions force bounded revision/refusal. Test scripts
 validate execution contracts, not scientific reasoning quality.
+
+## Stage 5 — jobs, API, SSE and UI
+
+Changed: API routers/contracts for upload/arXiv/library/search/RAG/research/
+providers, worker/RQ queue, durable event replay, trace logging, nonsecret config
+updates, runtime adapter factory and React/TypeScript/Vite UI with five pages,
+validated wire contracts and citation source dialogs. Added real DB API tests.
+
+Checks: Ruff format/lint, strict mypy (40 source files), pytest with PostgreSQL,
+frontend Prettier formatting/lint, TypeScript strict check and production build.
+
+Limitations: trusted local single-user deployment; model caches/provider keys
+must be configured for inference. Worker restart/resumption is explicit via retry;
+SSE events persist but automatic graph checkpoint resumption is not claimed.
+Evaluation UI has no canned numbers; actual runner/API added only in stage 6.
