@@ -16,3 +16,19 @@ research-only stage; no test pass is claimed for absent tests.
 
 Limitations: upstream metadata is a point-in-time observation; missing LICENSE
 means no code reuse. No corpus or empirical benchmark exists yet.
+
+## Stage 2 — data and ingestion
+
+Changed: pyproject.toml/uv.lock, domain document contracts, SQLAlchemy normalized
+models, Alembic migration/environment, parser abstraction/Docling adapter,
+structure chunker, ingestion/arXiv services, settings/errors, unit/integration
+tests and data-model documentation.
+
+Checks: Ruff format/lint, strict mypy (15 source files), three unit tests;
+PostgreSQL 17 + pgvector migration upgrade/downgrade/upgrade and ingestion/FTS
+integration checks. Core tests download no models and use no commercial API.
+
+Limitations: chunk token counts are reproducible lexical counts, not model
+BPE counts; mathematical extraction depends on Docling recognition; arXiv
+network access and actual Docling model parsing require model/network-enabled
+runtime and are not asserted by fixtures. First migration freezes 384 dimensions.
