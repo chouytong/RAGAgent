@@ -27,8 +27,16 @@ def exact_span(evidence: EvidenceRecord) -> bool:
 
 
 async def verify_claims(
-    claims: list[Claim], evidence: list[EvidenceRecord], aspects: list[str], provider: ChatProvider
+    claims: list[Claim],
+    evidence: list[EvidenceRecord],
+    aspects: list[str],
+    provider: ChatProvider,
+    question: str = "",
 ) -> CitationValidation:
+    if len({c.claim_id for c in claims}) != len(claims):
+        return CitationValidation(
+            valid=False, missing_citations=[c.claim_id for c in claims], missing_aspects=aspects
+        )
     by_id = {e.evidence_id: e for e in evidence if exact_span(e)}
     invalid = [
         c.claim_id
@@ -40,16 +48,23 @@ async def verify_claims(
         ClaimVerdict(claim_id=cid, supported=False, reason="missing_citation_or_invalid_span")
         for cid in invalid
     ]
+    model_missing: list[str] = []
     if eligible:
         response = await provider.complete(
             "Verify each claim only against its cited exact quotes. Check numeric values, "
             "comparative statements, scope and contradictions. Reject unsupported inference. "
+            "Also assess whether the original question and required aspects are fully answered. "
             "Return one verdict per claim; do not assign a confidence probability.",
             {
+                "question": question,
+                "required_aspects": aspects,
                 "claims": [c.model_dump() for c in eligible],
                 "evidence": [e.model_dump() for e in by_id.values()],
             },
             VerificationResponse,
+        )
+        model_missing = response.missing_aspects + (
+            [] if response.question_answered else ["original_question"]
         )
         grouped: dict[str, list[ClaimVerdict]] = {}
         for v in response.verdicts:
@@ -67,7 +82,7 @@ async def verify_claims(
             )
     supported = {v.claim_id for v in verdicts if v.supported and not v.contradiction}
     covered = {c.aspect for c in claims if c.claim_id in supported}
-    missing = [a for a in aspects if a not in covered]
+    missing = list(dict.fromkeys([a for a in aspects if a not in covered] + model_missing))
     return CitationValidation(
         valid=bool(claims) and len(supported) == len(claims) and not missing,
         verdicts=verdicts,

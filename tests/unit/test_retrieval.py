@@ -48,7 +48,12 @@ async def test_semantic_rejection_missing_aspect_and_verifier_omission() -> None
     e = evidence()
     claim = Claim(claim_id="c", text="Unsupported", evidence_ids=[e.evidence_id], aspect="method")
     mock = MockProvider(
-        [VerificationResponse(verdicts=[ClaimVerdict(claim_id="c", supported=False, reason="no")])]
+        [
+            VerificationResponse(
+                question_answered=True,
+                verdicts=[ClaimVerdict(claim_id="c", supported=False, reason="no")],
+            )
+        ]
     )
     result = await verify_claims([claim], [e], ["method"], mock)
     assert not result.valid and result.missing_aspects == ["method"]
