@@ -4,12 +4,13 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ragagent.api.papers import DB, QueueDep, enqueue
 from ragagent.api.schemas import QueryRequest, ResearchRequest, RunResponse
 from ragagent.db.models import ExecutionEvent, Run
 from ragagent.db.session import session_factory
+from ragagent.jobs import TERMINAL_STATUSES
 
 router = APIRouter(tags=["runs"])
 
@@ -38,15 +39,30 @@ async def stream_events(run_id: str, request: Request, cursor: int) -> AsyncIter
     while not await request.is_disconnected():
         # Short-lived sessions do not hold a connection during SSE idle time.
         with session_factory()() as session:
-            events = list(
-                session.scalars(
-                    select(ExecutionEvent)
-                    .where(ExecutionEvent.run_id == run_id, ExecutionEvent.id > cursor)
-                    .order_by(ExecutionEvent.id)
-                    .limit(100)
-                )
-            )
             run = session.get(Run, run_id)
+            if run is None:
+                return
+            terminal = run.status in TERMINAL_STATUSES
+            # The worker commits its terminal state and final event together. Read
+            # the state first, then drain through this stable terminal event watermark.
+            watermark = (
+                session.scalar(
+                    select(func.max(ExecutionEvent.id)).where(ExecutionEvent.run_id == run_id)
+                )
+                or 0
+                if terminal
+                else None
+            )
+            statement = (
+                select(ExecutionEvent)
+                .where(ExecutionEvent.run_id == run_id, ExecutionEvent.id > cursor)
+                .order_by(ExecutionEvent.id)
+                .limit(100)
+            )
+            if watermark is not None:
+                statement = statement.where(ExecutionEvent.id <= watermark)
+            events = list(session.scalars(statement))
+            batch = []
             for event in events:
                 cursor = event.id
                 payload = json.dumps(
@@ -56,10 +72,16 @@ async def stream_events(run_id: str, request: Request, cursor: int) -> AsyncIter
                         "time": event.created_at.isoformat(),
                     }
                 )
-                yield f"id: {event.id}\nevent: execution\ndata: {payload}\n\n"
-            if run and run.status not in {"queued", "running"} and len(events) < 100:
-                yield f"event: done\ndata: {RunResponse.model_validate(run).model_dump_json()}\n\n"
-                return
+                batch.append(f"id: {event.id}\nevent: execution\ndata: {payload}\n\n")
+            done = watermark is not None and cursor >= watermark
+            final = RunResponse.model_validate(run).model_dump_json() if done else None
+        for message in batch:
+            yield message
+        if final is not None:
+            yield f"event: done\ndata: {final}\n\n"
+            return
+        if terminal and events:
+            continue  # Drain a completed run without idle delay between replay pages.
         yield ": heartbeat\n\n"
         await asyncio.sleep(1)
 
@@ -82,6 +104,7 @@ def events(
         raise HTTPException(422, "invalid_event_cursor") from None
     if cursor < 0:
         raise HTTPException(422, "invalid_event_cursor")
+    db.rollback()  # Release the request session connection before the long-lived stream.
     return StreamingResponse(
         stream_events(run_id, request, cursor),
         media_type="text/event-stream",

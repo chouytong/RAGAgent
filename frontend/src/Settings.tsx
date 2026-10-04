@@ -3,14 +3,21 @@ import { z } from "zod";
 import { Mapping, Model, api } from "./api";
 export function Settings() {
   const [mapping, setMapping] = useState<Mapping | null>(null),
-    [message, setMessage] = useState("");
+    [savedMapping, setSavedMapping] = useState<Mapping | null>(null),
+    [message, setMessage] = useState(""),
+    [busy, setBusy] = useState(false);
+  const dirty = JSON.stringify(mapping) !== JSON.stringify(savedMapping);
   useEffect(() => {
     void api("/api/providers", Mapping)
-      .then(setMapping)
+      .then((loaded) => {
+        setMapping(loaded);
+        setSavedMapping(loaded);
+      })
       .catch((e) => setMessage(String(e)));
   }, []);
   async function save() {
     if (!mapping) return;
+    setBusy(true);
     try {
       await api(
         "/api/providers",
@@ -18,12 +25,24 @@ export function Settings() {
         mapping,
         "PUT",
       );
+      setSavedMapping(mapping);
       setMessage("已保存。密钥只从服务端环境读取。");
+      try {
+        const loaded = await api("/api/providers", Mapping);
+        setMapping(loaded);
+        setSavedMapping(loaded);
+      } catch {
+        setMessage("配置已保存，但密钥状态刷新失败，请重新打开 Settings。");
+      }
     } catch (e) {
       setMessage(String(e));
+    } finally {
+      setBusy(false);
     }
   }
   async function test(agent: string) {
+    if (dirty || busy) return;
+    setBusy(true);
     setMessage("正在测试…");
     try {
       const r = await api(
@@ -34,6 +53,8 @@ export function Settings() {
       setMessage(`${agent}: ${r.ok ? "连接正常" : "测试未通过"} (${r.model})`);
     } catch (e) {
       setMessage(String(e));
+    } finally {
+      setBusy(false);
     }
   }
   return (
@@ -45,7 +66,7 @@ export function Settings() {
       </p>
       {mapping &&
         Object.entries(mapping.agents).map(([role, model]) => (
-          <fieldset key={role}>
+          <fieldset key={role} disabled={busy}>
             <legend>{role}</legend>
             <div className="grid">
               <label>
@@ -80,7 +101,13 @@ export function Settings() {
                         ...mapping,
                         agents: {
                           ...mapping.agents,
-                          [role]: { ...model, [key]: e.target.value || null },
+                          [role]: {
+                            ...model,
+                            [key]:
+                              key === "model"
+                                ? e.target.value
+                                : e.target.value || null,
+                          },
                         },
                       })
                     }
@@ -92,12 +119,15 @@ export function Settings() {
               环境密钥：
               {model.key_configured ? "已配置 / 本地无需密钥" : "未配置"}
             </p>
-            <button onClick={() => void test(role)}>
+            <button disabled={dirty} onClick={() => void test(role)}>
               连接测试（可能产生少量费用）
             </button>
           </fieldset>
         ))}
-      <button disabled={!mapping} onClick={() => void save()}>
+      {dirty && (
+        <p>配置尚未保存。请先保存，再测试已保存的 Provider / Model。</p>
+      )}
+      <button disabled={!mapping || busy || !dirty} onClick={() => void save()}>
         保存配置
       </button>
       <p role="status">{message}</p>

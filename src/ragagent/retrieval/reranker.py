@@ -1,8 +1,11 @@
 import asyncio
+import threading
 from typing import Any, Protocol
 
+from ragagent.domain.documents import contextual_text
 from ragagent.domain.research import Candidate
 from ragagent.errors import ProviderError
+from ragagent.providers.model_identity import LocalModelIdentity
 
 
 class Reranker(Protocol):
@@ -12,16 +15,35 @@ class Reranker(Protocol):
 
 
 class CrossEncoderReranker:
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, revision: str | None = None) -> None:
         self.model_name = model
+        self.identity = LocalModelIdentity(model, revision)
         self._model: Any = None
+        self._load_lock = threading.Lock()
+
+    @property
+    def revision(self) -> str:
+        return self.identity.revision
 
     def _rank(self, query: str, candidates: list[Candidate], top_k: int) -> list[Candidate]:
         from sentence_transformers import CrossEncoder
 
+        revision = self.identity.sdk_revision
         if self._model is None:
-            self._model = CrossEncoder(self.model_name)
-        scores = self._model.predict([(query, c.evidence.content) for c in candidates]).tolist()
+            with self._load_lock:
+                if self._model is None:
+                    self._model = (
+                        CrossEncoder(self.model_name)
+                        if revision is None
+                        else CrossEncoder(self.model_name, revision=revision)
+                    )
+        scores = self._model.predict(
+            [
+                (query, contextual_text(c.evidence.content, c.evidence.source_context))
+                for c in candidates
+            ]
+        ).tolist()
+        self.identity.verify_directory()
         ranked = [
             Candidate(
                 evidence=c.evidence.model_copy(

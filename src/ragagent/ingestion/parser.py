@@ -12,17 +12,21 @@ class Parser(Protocol):
 class DoclingParser:
     def parse(self, path: Path) -> ParsedDocument:
         # Lazy import: core tests do not install or download layout/OCR models.
-        from docling.document_converter import DocumentConverter
-
         try:
+            from docling.document_converter import DocumentConverter
+
             document = DocumentConverter().convert(path).document
             elements: list[Element] = []
             headings: list[str] = []
-            for item, _level in document.iterate_items():
+            section_ids: list[str] = []
+            heading_ordinal = 0
+            for item, _level in document.iterate_items(traverse_pictures=True):
                 label = str(getattr(item.label, "value", item.label))
                 if label == "section_header":
                     depth = max(1, int(getattr(item, "level", 1)))
                     headings = headings[: depth - 1] + [item.text]
+                    section_ids = section_ids[: depth - 1] + [f"heading:{heading_ordinal}"]
+                    heading_ordinal += 1
                 provenance = getattr(item, "prov", [])
                 if not provenance:
                     continue
@@ -36,10 +40,17 @@ class DoclingParser:
                 elements.append(
                     Element(
                         section_path=headings or ["Preamble"],
+                        section_ids=section_ids or ["preamble"],
                         page_start=min(pages),
                         page_end=max(pages),
                         element_type=label,
                         content=text,
+                        source_id=getattr(item, "self_ref", None),
+                        related_source_ids=[
+                            ref.cref
+                            for ref in getattr(item, "captions", [])
+                            if hasattr(ref, "cref")
+                        ],
                     )
                 )
             if not elements:

@@ -1,5 +1,19 @@
 import { z } from "zod";
+export const SourceStatus = z.enum([
+  "unknown",
+  "active",
+  "withdrawn",
+  "retracted",
+]);
+export type SourceStatus = z.infer<typeof SourceStatus>;
+export const SourceMetadata = z.object({
+  arxiv_id: z.string().nullable().default(null),
+  arxiv_family_id: z.string().nullable().default(null),
+  arxiv_version: z.number().int().positive().nullable().default(null),
+  source_status: SourceStatus.default("unknown"),
+});
 export const Paper = z.object({
+  ...SourceMetadata.shape,
   id: z.string(),
   title: z.string(),
   authors: z.array(z.string()),
@@ -9,14 +23,39 @@ export const Paper = z.object({
   error_code: z.string().nullable(),
   chunk_count: z.number(),
 });
+export const SourceContext = z.object({
+  source_id: z.string(),
+  element_type: z.string(),
+  section_path: z.array(z.string()),
+  page_start: z.number(),
+  page_end: z.number(),
+  content: z.string(),
+  quote: z.string(),
+  span_start: z.number(),
+  span_end: z.number(),
+  source_offset: z.number().default(0),
+});
+export const SourceSpan = z.object({
+  source_id: z.string(),
+  span_start: z.number(),
+  span_end: z.number(),
+  chunk_start: z.number(),
+  chunk_end: z.number(),
+});
 export const Evidence = z.object({
   evidence_id: z.string(),
-  paper: z.object({ paper_id: z.string(), title: z.string() }),
+  paper: SourceMetadata.extend({ paper_id: z.string(), title: z.string() }),
   chunk_id: z.string(),
+  section_id: z.string().optional(),
   section_path: z.string(),
   page_start: z.number(),
   page_end: z.number(),
   quote: z.string(),
+  content: z.string().optional(),
+  span_start: z.number().optional(),
+  span_end: z.number().optional(),
+  source_context: z.array(SourceContext).default([]),
+  source_spans: z.array(SourceSpan).default([]),
 });
 export type Evidence = z.infer<typeof Evidence>;
 export const Result = z
@@ -25,6 +64,14 @@ export const Result = z
     draft_report: z.string().optional(),
     research_plan: z.unknown().optional(),
     review_result: z.unknown().optional(),
+    limitations: z.array(z.string()).default([]),
+    analysis_results: z
+      .array(
+        z
+          .object({ limitations: z.array(z.string()).default([]) })
+          .passthrough(),
+      )
+      .default([]),
     evidence_pool: z.array(Evidence).optional(),
     reranked_evidence: z.array(Evidence).optional(),
   })
@@ -64,8 +111,10 @@ export async function api<T>(
   schema: z.ZodType<T>,
   body?: unknown,
   method = "POST",
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(path, {
+    signal,
     method: body === undefined ? "GET" : method,
     headers:
       body instanceof FormData ? {} : { "Content-Type": "application/json" },

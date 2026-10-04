@@ -1,17 +1,24 @@
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import { Run, api } from "./api";
 import { Json } from "./components";
 export function Evaluation() {
   const [dataset, setDataset] = useState(""),
     [run, setRun] = useState<Run | null>(null),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [submitting, setSubmitting] = useState(false);
+  const summary = z
+    .record(z.string(), z.record(z.string(), z.number().nullable()))
+    .safeParse(run?.result?.summary);
   const id = run?.id;
   useEffect(() => {
     if (!id) return;
     const es = new EventSource(`/api/runs/${id}/events`);
+    es.addEventListener("open", () => setError(""));
     es.addEventListener("done", (e) => {
       try {
         setRun(Run.parse(JSON.parse((e as MessageEvent<string>).data)));
+        setError("");
       } catch (err) {
         setError(String(err));
       }
@@ -21,6 +28,7 @@ export function Evaluation() {
     return () => es.close();
   }, [id]);
   async function start() {
+    setSubmitting(true);
     try {
       setError("");
       setRun(
@@ -30,6 +38,8 @@ export function Evaluation() {
       );
     } catch (e) {
       setError(String(e));
+    } finally {
+      setSubmitting(false);
     }
   }
   return (
@@ -57,7 +67,10 @@ export function Evaluation() {
       />
       <button
         disabled={
-          !dataset || run?.status === "queued" || run?.status === "running"
+          submitting ||
+          !dataset ||
+          run?.status === "queued" ||
+          run?.status === "running"
         }
         onClick={() => void start()}
       >
@@ -70,7 +83,38 @@ export function Evaluation() {
             状态：{run.status}
             {run.error_code && ` · ${run.error_code}`}
           </p>
-          <Json value={run.result} />
+          {summary.success && (
+            <table>
+              <thead>
+                <tr>
+                  <th>模式</th>
+                  {Object.keys(Object.values(summary.data)[0] ?? {}).map(
+                    (k) => (
+                      <th key={k}>{k}</th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(summary.data).map(([mode, metrics]) => (
+                  <tr key={mode}>
+                    <td>{mode}</td>
+                    {Object.entries(metrics).map(([k, v]) => (
+                      <td key={k}>
+                        {v === null
+                          ? "N/A"
+                          : v.toFixed(k === "latency_ms" ? 2 : 4)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <details>
+            <summary>完整结果及 provenance</summary>
+            <Json value={run.result} />
+          </details>
           {run.status === "completed" && (
             <p>
               <a href={`/api/evaluations/${run.id}/results.json`}>

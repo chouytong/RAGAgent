@@ -7,13 +7,13 @@ license = "MIT"
 dependencies = [
   "fastapi==0.142.2", "uvicorn[standard]>=0.35,<1", "pydantic>=2.12,<3",
   "pydantic-settings>=2.10,<3", "sqlalchemy>=2.0.43,<3", "alembic>=1.16,<2",
-  "psycopg[binary]>=3.2,<4", "pgvector==0.5.0", "redis>=6,<8", "rq>=2.5,<3",
+  "psycopg[binary]>=3.2,<4", "pgvector==0.5.0", "redis>=6,<8", "rq>=2.12,<3",
   "langgraph==1.2.12", "litellm==1.103.2", "httpx>=0.28,<1",
-  "python-multipart>=0.0.20,<1", "pyyaml>=6,<7", "tenacity>=9,<10",
+  "python-multipart>=0.0.20,<1", "pyyaml>=6,<7", "tenacity>=9,<10", "python-dotenv>=1,<2",
 ]
 [project.optional-dependencies]
 parsing = ["docling==2.133.0"]
-models = ["sentence-transformers>=5,<6"]
+models = ["sentence-transformers>=5,<6", "torch==2.8.0", "torchvision==0.23.0"]
 [dependency-groups]
 dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "ruff==0.16.10", "mypy>=1.18,<3", "types-PyYAML>=6", "httpx>=0.28"]
 [build-system]
@@ -35,3 +35,11 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = ["integration: requires PostgreSQL with pgvector"]
+
+[tool.uv.sources]
+torch = [{index = "pytorch-cpu", marker = "sys_platform == 'linux'"}]
+torchvision = [{index = "pytorch-cpu", marker = "sys_platform == 'linux'"}]
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

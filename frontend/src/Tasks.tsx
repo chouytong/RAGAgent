@@ -9,10 +9,25 @@ export function Tasks({ research }: { research: boolean }) {
     [events, setEvents] = useState<EventType[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const storageKey = research ? "research_last_run" : "rag_last_run";
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved)
+      void api(`/api/runs/${saved}`, Run)
+        .then((r) => {
+          setRun(r);
+          setBusy(r.status === "queued" || r.status === "running");
+        })
+        .catch((e) => setError(String(e)));
+  }, [storageKey]);
   const id = run?.id;
+  useEffect(() => {
+    if (id) localStorage.setItem(storageKey, id);
+  }, [id, storageKey]);
   useEffect(() => {
     if (!id) return;
     const es = new EventSource(`/api/runs/${id}/events`);
+    es.addEventListener("open", () => setError(""));
     es.addEventListener("execution", (event) => {
       try {
         setError("");
@@ -27,9 +42,11 @@ export function Tasks({ research }: { research: boolean }) {
     es.addEventListener("done", (event) => {
       try {
         setRun(Run.parse(JSON.parse((event as MessageEvent<string>).data)));
+        setError("");
         setBusy(false);
       } catch {
         setError("结果格式错误");
+        setBusy(false);
       }
       es.close();
     });
@@ -54,6 +71,14 @@ export function Tasks({ research }: { research: boolean }) {
     }
   }
   const result = run?.result;
+  const limitations = [
+    ...new Set([
+      ...(result?.limitations ?? []),
+      ...(result?.analysis_results.flatMap(
+        (analysis) => analysis.limitations,
+      ) ?? []),
+    ]),
+  ];
   const plan =
     result?.research_plan ??
     events.find((e) => e.node === "plan")?.payload.research_plan;
@@ -109,6 +134,16 @@ export function Tasks({ research }: { research: boolean }) {
             text={result.answer ?? result.draft_report ?? ""}
             evidence={result.evidence_pool ?? result.reranked_evidence ?? []}
           />
+          {limitations.length > 0 && (
+            <aside aria-label="未验证项与局限">
+              <h3>未验证项与局限（尚未验证）</h3>
+              <ul>
+                {limitations.map((limitation) => (
+                  <li key={limitation}>{limitation}</li>
+                ))}
+              </ul>
+            </aside>
+          )}
           {result.review_result != null && (
             <details open>
               <summary>Reviewer Result</summary>

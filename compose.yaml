@@ -1,0 +1,76 @@
+name: scientific-ragagent
+x-backend: &backend
+  image: scientific-ragagent-backend:local
+  build:
+    context: .
+    dockerfile: docker/backend.Dockerfile
+  env_file: .env
+  environment:
+    DATA_DIR: /data
+    HF_HOME: /models/huggingface
+  volumes:
+    - papers:/data
+    - models:/models
+    - ./config:/app/config
+    - ./.git:/app/.git:ro
+services:
+  db:
+    image: pgvector/pgvector:0.8.2-pg17
+    environment:
+      POSTGRES_DB: ragagent
+      POSTGRES_USER: ragagent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragagent}
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragagent -d ragagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db: {condition: service_healthy}
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  worker:
+    <<: *backend
+    command: ["python", "-m", "ragagent.worker"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    ports: ["127.0.0.1:8080:80"]
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+volumes:
+  postgres:
+  redis:
+  papers:
+  models:

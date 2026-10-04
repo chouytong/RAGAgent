@@ -1,0 +1,223 @@
+{
+  "$defs": {
+    "EvaluationCase": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "query": {
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "question_type": {
+          "enum": [
+            "fact",
+            "comparison",
+            "synthesis",
+            "filter"
+          ],
+          "title": "Question Type",
+          "type": "string"
+        },
+        "filters": {
+          "$ref": "#/$defs/MetadataFilter"
+        },
+        "relevant_chunk_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relevant Chunk Ids",
+          "type": "array"
+        },
+        "relevant_paper_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relevant Paper Ids",
+          "type": "array"
+        },
+        "expected_answer": {
+          "title": "Expected Answer",
+          "type": "string"
+        },
+        "expected_refusal": {
+          "default": false,
+          "title": "Expected Refusal",
+          "type": "boolean"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "required_aspects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Aspects",
+          "type": "array"
+        },
+        "annotated_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotated By"
+        },
+        "annotated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotated At"
+        }
+      },
+      "required": [
+        "id",
+        "query",
+        "question_type",
+        "expected_answer"
+      ],
+      "title": "EvaluationCase",
+      "type": "object"
+    },
+    "MetadataFilter": {
+      "properties": {
+        "paper_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paper Ids",
+          "type": "array"
+        },
+        "authors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "year_start": {
+          "anyOf": [
+            {
+              "maximum": 2100,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year Start"
+        },
+        "year_end": {
+          "anyOf": [
+            {
+              "maximum": 2100,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year End"
+        },
+        "venues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Venues",
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sections",
+          "type": "array"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entity Types",
+          "type": "array"
+        },
+        "datasets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datasets",
+          "type": "array"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Methods",
+          "type": "array"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        }
+      },
+      "title": "MetadataFilter",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "label_source": {
+      "enum": [
+        "human",
+        "synthetic",
+        "unannotated"
+      ],
+      "title": "Label Source",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/EvaluationCase"
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "label_source",
+    "description",
+    "cases"
+  ],
+  "title": "EvaluationDataset",
+  "type": "object"
+}

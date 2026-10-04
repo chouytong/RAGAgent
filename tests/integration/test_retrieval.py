@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from ragagent.db.models import Author, Chunk, ChunkEntity, Entity, Paper, PaperAuthor, Section
@@ -104,3 +105,102 @@ async def test_real_vector_fts_hybrid_and_all_filters(empty_db: Session) -> None
         QueryPlan(queries=["contrastive"], filters=MetadataFilter(datasets=["absent"]))
     )
     assert not absent.dense and not absent.lexical and not absent.evidence
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "filters",
+    [
+        MetadataFilter(paper_ids=["absent"]),
+        MetadataFilter(authors=["Nobody"]),
+        MetadataFilter(year_start=2025),
+        MetadataFilter(year_end=2019),
+        MetadataFilter(venues=["absent"]),
+        MetadataFilter(sections=["absent"]),
+        MetadataFilter(entity_types=["absent"]),
+        MetadataFilter(datasets=["absent"]),
+        MetadataFilter(methods=["absent"]),
+        MetadataFilter(metrics=["absent"]),
+    ],
+)
+async def test_each_filter_excludes_both_retrievers(
+    empty_db: Session, filters: MetadataFilter
+) -> None:
+    populate(empty_db)
+    retriever = HybridRetriever(empty_db, Embedder(), FixtureReranker())
+    result = await retriever.search(QueryPlan(queries=["contrastive"], filters=filters))
+    assert not result.dense and not result.lexical
+
+
+@pytest.mark.integration
+async def test_parent_section_filter_includes_child_path(empty_db: Session) -> None:
+    pid, cid = populate(empty_db)
+    c = empty_db.get(Chunk, cid)
+    assert c is not None
+    parent_id = c.section_id
+    child = Section(
+        paper_id=pid, parent_id=parent_id, title="Training", path="Methods / Training", ordinal=1
+    )
+    empty_db.add(child)
+    empty_db.flush()
+    c.section_id, c.section_path = child.id, child.path
+    empty_db.flush()
+    result = await HybridRetriever(empty_db, Embedder(), FixtureReranker()).search(
+        QueryPlan(
+            queries=["contrastive"], filters=MetadataFilter(paper_ids=[pid], sections=["methods"])
+        )
+    )
+    assert result.evidence and result.evidence[0].chunk_id == cid
+
+
+@pytest.mark.integration
+async def test_empty_corpus_does_not_call_model(empty_db: Session) -> None:
+    class NoModel:
+        fingerprint = "test:384"
+
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            raise AssertionError("empty corpus must not call embedding provider")
+
+    result = await HybridRetriever(empty_db, NoModel(), FixtureReranker()).search(
+        QueryPlan(queries=["q"])
+    )
+    assert not result.dense and not result.lexical and not result.evidence
+
+
+@pytest.mark.integration
+async def test_author_metadata_queries_are_batched_and_not_cached_across_searches(
+    empty_db: Session,
+) -> None:
+    from typing import Any
+
+    populate(empty_db)
+    retriever = HybridRetriever(empty_db, Embedder(), FixtureReranker())
+    connection = empty_db.connection()
+    author_queries: list[str] = []
+
+    def capture(
+        connection: Any, cursor: Any, statement: str, parameters: Any, context: Any, many: bool
+    ) -> None:
+        if statement.lstrip().startswith("SELECT") and "JOIN authors ON" in statement:
+            author_queries.append(statement)
+
+    event.listen(connection, "before_cursor_execute", capture)
+    plan = QueryPlan(queries=["contrastive", "training", "retrieval"])
+    try:
+        first = await retriever.search(plan)
+        assert len(author_queries) == 1
+        assert next(e.paper.authors for e in first.evidence if e.paper.title == "Contrastive") == [
+            "Alice"
+        ]
+        author = empty_db.scalar(select(Author).where(Author.name == "Alice"))
+        assert author
+        author.name = "Alice Updated"
+        empty_db.flush()
+        author_queries.clear()
+        second = await retriever.search(plan)
+        assert len(author_queries) == 1
+        assert next(e.paper.authors for e in second.evidence if e.paper.title == "Contrastive") == [
+            "Alice Updated"
+        ]
+    finally:
+        event.remove(connection, "before_cursor_execute", capture)

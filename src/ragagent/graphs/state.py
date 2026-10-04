@@ -23,6 +23,8 @@ class RAGState(BaseModel):
     reranked_evidence: list[EvidenceRecord] = Field(default_factory=list)
     answer: str = ""
     claims: list[Claim] = Field(default_factory=list)
+    # Analyst notes are retained for inspection, never released as verified factual prose.
+    limitations: list[str] = Field(default_factory=list)
     citation_validation: CitationValidation | None = None
     sufficiency: EvidenceSufficiencyResult | None = None
     retrieval_attempt: int = 0
@@ -38,6 +40,7 @@ class RAGUpdate(TypedDict, total=False):
     reranked_evidence: list[EvidenceRecord]
     answer: str
     claims: list[Claim]
+    limitations: list[str]
     citation_validation: CitationValidation | None
     sufficiency: EvidenceSufficiencyResult
     retrieval_attempt: int
@@ -75,6 +78,21 @@ class AnalysisResult(BaseModel):
     metrics: list[Claim] = Field(default_factory=list)
     contradictions: list[Claim] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+
+    def factual_claims(self) -> list[Claim]:
+        by_id: dict[str, Claim] = {}
+        for claim in (
+            self.claims + self.methods + self.datasets + self.metrics + self.contradictions
+        ):
+            if claim.claim_id in by_id and by_id[claim.claim_id] != claim:
+                raise ValueError("conflicting_claim_id")
+            by_id[claim.claim_id] = claim
+        return list(by_id.values())
+
+    @model_validator(mode="after")
+    def consistent_claim_ids(self) -> "AnalysisResult":
+        self.factual_claims()
+        return self
 
 
 class ReviewResult(BaseModel):

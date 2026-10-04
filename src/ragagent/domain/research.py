@@ -1,7 +1,9 @@
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, FiniteFloat, model_validator
+
+from ragagent.domain.documents import SourceContext, SourceSpan
 
 
 class MetadataFilter(BaseModel):
@@ -25,6 +27,7 @@ class MetadataFilter(BaseModel):
 
 class QueryPlan(BaseModel):
     queries: list[str] = Field(min_length=1, max_length=6)
+    rerank_query: str | None = None
     question_type: Literal["fact", "comparison", "synthesis", "filter"] = "fact"
     required_aspects: list[str] = Field(default_factory=list, max_length=12)
     filters: MetadataFilter = Field(default_factory=MetadataFilter)
@@ -37,6 +40,9 @@ class PaperMetadata(BaseModel):
     year: int | None = None
     venue: str | None = None
     arxiv_id: str | None = None
+    arxiv_family_id: str | None = None
+    arxiv_version: int | None = None
+    source_status: Literal["unknown", "active", "withdrawn", "retracted"] = "unknown"
 
 
 class EvidenceRecord(BaseModel):
@@ -51,12 +57,14 @@ class EvidenceRecord(BaseModel):
     quote: str
     span_start: int
     span_end: int
-    scores: dict[str, float] = Field(default_factory=dict)
+    scores: dict[str, FiniteFloat] = Field(default_factory=dict)
+    source_context: list[SourceContext] = Field(default_factory=list)
+    source_spans: list[SourceSpan] = Field(default_factory=list)
 
 
 class Candidate(BaseModel):
     evidence: EvidenceRecord
-    score: float
+    score: FiniteFloat
 
 
 class SearchResult(BaseModel):
@@ -80,9 +88,15 @@ class ClaimVerdict(BaseModel):
     contradiction: bool = False
 
 
+class ClaimEvidencePair(BaseModel):
+    claim_id: str
+    evidence_id: str
+
+
 class CitationValidation(BaseModel):
     valid: bool
     verdicts: list[ClaimVerdict] = Field(default_factory=list)
+    supported_pairs: list[ClaimEvidencePair] = Field(default_factory=list)
     missing_citations: list[str] = Field(default_factory=list)
     missing_aspects: list[str] = Field(default_factory=list)
 
@@ -108,6 +122,7 @@ class AnswerDraft(BaseModel):
 
 class VerificationResponse(BaseModel):
     verdicts: list[ClaimVerdict]
+    supported_pairs: list[ClaimEvidencePair]
     question_answered: bool = False
     missing_aspects: list[str] = Field(default_factory=list)
 

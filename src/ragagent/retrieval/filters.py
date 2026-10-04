@@ -1,4 +1,4 @@
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 
 from ragagent.db.models import Author, Chunk, ChunkEntity, Entity, Paper, PaperAuthor
 from ragagent.domain.research import MetadataFilter
@@ -25,13 +25,22 @@ def apply_filters(
         )
         statement = statement.where(Paper.id.in_(subquery))
     if filters.sections:
-        # Exact full path or exact leaf heading. Bound parameters prevent SQL injection.
         from ragagent.db.models import Section
 
-        statement = statement.where(
-            Chunk.section_path.in_(filters.sections)
-            | Chunk.section_id.in_(select(Section.id).where(Section.title.in_(filters.sections)))
+        path = func.lower(Chunk.section_path)
+        section_conditions = [path == section.lower() for section in filters.sections]
+        section_conditions += [
+            path.startswith(section.lower() + " / ", autoescape=True)
+            for section in filters.sections
+        ]
+        section_conditions.append(
+            Chunk.section_id.in_(
+                select(Section.id).where(
+                    func.lower(Section.title).in_([x.lower() for x in filters.sections])
+                )
+            )
         )
+        statement = statement.where(or_(*section_conditions))
     for names, kind in [
         (filters.datasets, "dataset"),
         (filters.methods, "method"),

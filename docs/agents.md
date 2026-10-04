@@ -24,10 +24,21 @@ it uses the configured retriever model for expansion. Analysis returns linked
 claims and structured comparisons/contradictions. Report synthesis adds no
 LLM-generated prose. Reviewer verifies existence, spans, semantic support and
 required aspect coverage; it cannot pass an unsupported claim by assessing style.
-Contradictions force revision. User metadata restrictions override planner
-proposals and survive expansion. Evidence is unioned/deduplicated across retries.
+It returns both claim verdicts and exact `supported_pairs`. Every attached
+citation must support at least part of the claim; unknown/duplicate pairs or a
+missing pair force revision even if the claim-level verdict says supported.
+Unsupported or conflicting claim/evidence pairs force revision; supported contradictory findings can be reported with both citations. User metadata restrictions override planner
+proposals and survive expansion. Evidence is unioned/deduplicated across retries
+only after exact-span and configured rerank-threshold acceptance. Both graphs
+use that accepted pool for generation and verification. `RAG_EVIDENCE_BUDGET`
+defaults to 48 records and `RESEARCH_EVIDENCE_BUDGET` to 96, preserving earlier accepted records
+first; reaching a pool limit is recorded as `evidence_budget_exhausted`.
 
-Each retrieval round and analysis/review iteration advances counters. Explicit
+Supervisor replans missing aspects from reviewer feedback while retaining prior
+required aspects. A completed task survives replan only when its full validated
+task content is unchanged; reusing an ID for different queries, filters or
+aspects makes the task pending. Each replan, retrieval round and analysis/review
+iteration advances counters. Explicit
 retrieval/revision/iteration limits stop retries; runtime recursion_limit is an
 additional guard. Research counts rounds separately from total retrieval queries.
 Task completion means retrieval found task evidence; report completion additionally
@@ -36,7 +47,25 @@ PASS. Drafts remain inspectable through events but are labeled drafts.
 
 RAG: plan → retrieve → evidence gate → answer claims → citation verifier.
 Partial/insufficient evidence expands the query up to max retries, then refuses.
+Query expansion deduplicates and retains at most six queries per plan/task;
+the bounded evidence union preserves support from prior rounds even if earlier
+queries leave that window. Model-authored citation markers in claim text fail
+verification; deterministic rendering appends only validated Evidence IDs.
 Unknown, missing or duplicate semantic verifier verdicts fail closed.
+
+Retriever expansion preserves the original question/current subtask as the
+rerank target instead of favoring the first expanded query. Analysis sends exact
+quotes and source metadata once, including independently sourced table context
+when present, without repeating full chunk content. Shared drafts never become
+retrieval evidence. Paper version/source status accompany evidence; withdrawn
+or retracted sources are filtered before both retrieval channels.
+
+Worker chat and hosted-embedding usage is tracked before and after each paid call
+and persisted in its Run for success or failure; evaluation also checkpoints its
+artifact on usage updates. In-flight calls are recorded as unknown charges
+because a killed worker may not receive billing metadata. Returned provider
+model/system identities supplement configured dated model names. Retry bounds
+limit attempts; they do not guarantee a fixed currency budget.
 
 Model-based semantic verification remains fallible. This is an engineering
 control, not a guarantee of scientific correctness or human ground truth.
