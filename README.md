@@ -52,7 +52,12 @@ Upload PDFs with optional title/authors/year/venue or import an open arXiv ID.
 The original PDF, structured sections, text/tables/captions, pages, chunks and
 embeddings are retained. Inspect indexing status and metadata in Knowledge Base.
 Chunking stays within section and element type, with configurable token target
-and overlap. Dense/lexical retrieval share all metadata predicates. Annotate
+and overlap. Decimal/scientific-notation values stay intact; recognized Markdown
+tables split at row boundaries with separately sourced headers/captions, while
+formulas and tables with unknown structure remain atomic even above the target.
+New arXiv imports freeze the official versioned ID before downloading. Source
+status starts as `unknown`; manually marked withdrawn/retracted papers are
+excluded from retrieval. Dense/lexical retrieval share all metadata predicates. Annotate
 chunk entities for dataset/method/metric filters through the API.
 
 ```bash
@@ -67,7 +72,10 @@ curl -H 'Content-Type: application/json' -d '{"arxiv_id":"2408.09869"}' \
 RAG handles fact queries, method comparison and constrained retrieval. Every
 released factual claim has validated structured Evidence IDs, exact supporting
 text, paper, section, page and chunk. Model-authored citation markers are rejected;
-only deterministic formatting emits citations. The configured rerank threshold
+only deterministic formatting emits citations. The reviewer must also support
+every attached claim/evidence pair; an unrelated citation requires revision.
+Multi-query retrieval reranks against the original question or current subtask,
+preserving that target during expansion. The configured rerank threshold
 restricts the evidence supplied to generation and verification in both workflows.
 Missing support triggers bounded expansion then explicit refusal.
 Retrieval scores are heuristics, not calibrated model confidence probabilities.
@@ -141,11 +149,19 @@ curl -N http://localhost:8000/api/research/RUN_ID/events
 Edit `.env` runtime secrets and `config/agents.yaml`, or nonsecret Settings UI
 mapping. Each agent can independently use OpenAI, Anthropic, DeepSeek, Ollama or
 an OpenAI-compatible local server through LiteLLM. Embeddings/reranker have
-separate configuration. Provider connectivity tests never return keys.
+separate configuration. YAML expands only nonsecret `*_MODEL` variables in model
+fields; API mapping writes reject unresolved templates. Local Host validation and
+same-origin browser write checks protect the local API. Provider connectivity
+tests never return keys. Default chat mappings use a dated model identifier;
+returned provider model identities are recorded when available.
 Hosted embeddings support `openai`, `cohere`, `cohere_chat` and `voyage` prefixes;
 compatible servers use `openai/<model>` with an explicit base. Embedding endpoint
 identity is frozen for both indexing and SDK calls. A hosted
 `EMBEDDING_REVISION` is an operator index label, not server-weight pinning.
+Local Hub adapters resolve a requested revision to an immutable SHA on first use;
+set that SHA explicitly to reproduce later runs. The `local:v2` fingerprint requires
+reembedding old local indexes. `python -m ragagent.reindex --all-indexed` updates
+vectors atomically per paper while preserving chunk/citation IDs.
 See [deployment](docs/deployment.md) for all-local/hosted embedding examples,
 model caches, migrations, network requirements and troubleshooting.
 
@@ -154,9 +170,18 @@ model caches, migrations, network requirements and troubleshooting.
 Evaluation page accepts a benchmark dataset and runs retrieval ablation. APIs
 also run RAG and multi-agent evaluation. Each run writes results.json/results.md
 with Git commit, dataset hash, timestamp, execution configuration and actual
-per-query metrics/latency. Generation results also retain the final output,
+per-query metrics/latency. Each case checkpoints results; partial/failed terminal
+runs keep downloadable artifacts and can be resumed explicitly using
+`resume_run_id` if dataset, source, configuration and corpus identities match.
+Resumed costs retain separate current-attempt and previous-attempt records.
+Generation results also retain the final output,
 evidence and raw judge response for inspection. Semantic judge results are
 explicitly MODEL_BASED; unknown provider charges make total cost incomplete.
+Workflow usage includes hosted embeddings; in-flight/failed paid calls are
+recorded with unknown cost rather than assumed free. Worker Runs persist paid-call
+usage updates; evaluation artifacts also checkpoint those updates between cases.
+Synchronous search/provider tests return request usage only, and the reindex CLI
+prints cumulative usage; neither has a durable Run billing ledger.
 
 ```bash
 python scripts/annotation_template.py my-annotations.json --count 100
@@ -194,7 +219,7 @@ V1 is a trusted local single-user application. English PostgreSQL FTS, exact
 vector search and lexical token counts are deliberate first-release choices.
 Docling equation/OCR/table fidelity depends on the document and models. Semantic
 verification can be wrong; scientific conclusions need human review. Provider
-capabilities, latency and model cost vary. Automatic checkpoint resumption,
+capabilities, latency and model cost vary. Automatic graph checkpoint resumption,
 public/multi-tenant security and ANN tuning require further work. Models and
 PDFs are not vendored. Restricted cloud network/model access is reported as a
 verification limitation, never disguised with mock inference.

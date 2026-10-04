@@ -13,4 +13,4 @@ Implementation and check outcomes are recorded separately in
 | [0003](0003-versioned-tasks-and-bounded-evidence.md) | Content-aware task completion and bounded retry evidence |
 | [0004](0004-provider-and-index-identity.md) | Independent provider configuration and embedding-space identity |
 | [0005](0005-durable-dispatch-and-terminal-events.md) | Durable dispatch, state reconciliation and terminal SSE drain |
-
+| [0006](0006-review-corrections.md) | Review corrections for evidence, source/model identity, secrets and partial evaluation accounting |

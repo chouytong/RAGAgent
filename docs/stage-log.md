@@ -348,3 +348,186 @@ the local verification results above remain distinct from hosted CI outcomes.
 - `tests/unit/test_retrieval.py`
 - `tests/unit/test_runtime_configuration.py`
 - `uv.lock`
+
+
+## Scientific review corrections — 2026-10-04
+
+Baseline: `phase-6-evaluation-deployment` at
+`a4495d8cbf3142c78a9159c7d87b0629be21a450`. The repair checkout is
+`/workspace/RAGAgent-fixes`, local branch `fix-scientific-review`. The checks below
+were completed locally before publication. The user subsequently authorized
+publishing these repairs to `phase-6-evaluation-deployment` in three reviewable
+commits: backend/tests, frontend and documentation. Publication does not include
+merging or deployment. GitHub commit history records the published SHAs; hosted
+CI outcomes remain separate from the local checks below. The earlier submission
+record above describes the baseline history, not this repair pass.
+
+### Review findings addressed
+
+1. Provider YAML is parsed before safe model-only interpolation; secret variables
+   and unresolved API templates are rejected. Host/Origin guards and preserved
+   proxy Host protect local browser writes (`providers/config.py`, `api/security.py`).
+2. Scientific numbers, including leading-dot decimals and Unicode exponent minus,
+   remain atomic. Tables retain rows and independently located headers/captions;
+   equations and unrecognized table layouts remain atomic (`ingestion/chunker.py`).
+3. Every attached claim/evidence pair must receive explicit support, with missing,
+   unknown and duplicated pairs failing closed (`retrieval/evidence.py`).
+4. arXiv imports freeze canonical `vN`; same-byte versions remain separate.
+   Migration 0003 retains unknown legacy versions and source status; both search
+   channels exclude manually withdrawn/retracted sources (`ingestion/arxiv.py`,
+   `worker.py`, `db/models.py`, `retrieval/service.py`, paper API/UI).
+5. Reranking uses the original question/subtask; direct multi-query callers use
+   all queries as fallback (`graphs/rag.py`, `graphs/research.py`, `retrieval/service.py`).
+6. `python -m ragagent.reindex` atomically reembeds per paper while preserving
+   chunk/citation IDs. A failed batch rolls back all changes for that paper;
+   dimensions cannot silently change (`ingestion/reembed.py`, `reindex.py`).
+7. Local Hub models freeze a real immutable revision before identity/loading;
+   local directories hash artifacts and detect changes. Dated chat defaults and
+   actual returned model/system identities are recorded (`providers/model_identity.py`).
+8. Worker calls checkpoint unknown charges before dispatch and accounted usage
+   afterward in a separate database transaction, without committing partial
+   indexing. Reused adapters start a fresh Run ledger and release observers.
+   Evaluation checkpoints per case and paid-call update, retains failure artifacts,
+   resumes only compatible completed rows, and keeps prior-attempt costs separate.
+   Frozen evaluation timeouts are shared by RQ and reconciliation (`worker.py`,
+   `providers/chat.py`, `evaluation/*`, `jobs.py`, `api/queue.py`).
+9. Hosted embedding tokens/costs join worker/evaluation totals; synchronous
+   search and provider connectivity responses also return request-level usage.
+   Unknown charges remain null rather than becoming zero (`providers/embedding.py`,
+   `api/app.py`, `api/providers.py`).
+10. Analyzer/verifier/judge inputs include exact quotes once, excluding duplicated
+    main and auxiliary content (`retrieval/evidence.py:evidence_payload`).
+11. Settings validate overlap versus target before jobs start (`settings.py`).
+
+### Actual verification
+
+- Locked Python dependencies installed with `uv sync --locked` into `.venv`;
+  checks used that same environment directly, avoiding cache permission issues.
+- `.venv/bin/ruff format .`, final `ruff format --check .` and `ruff check .`:
+  passed, 125 Python files formatted.
+- `.venv/bin/mypy src`: passed, 57 source files.
+- Full `.venv/bin/pytest -q`: **271 passed**, including **60 real PostgreSQL/
+  pgvector and Redis/RQ integration tests**; no skips or failures. Two existing
+  RQ fork deprecation warnings occurred in process-interruption tests.
+- Database migration `alembic upgrade head` reached 0003 in a disposable test
+  database. Migration integration tests cover legacy upgrade, retained source
+  versions and guarded downgrade.
+- New/expanded tests verify numeric boundaries and source offsets, claim/citation
+  support pairs, canonical versions/concurrent imports, metadata/status filters,
+  multi-query reranking, model identity mocks, hosted fees and request deltas,
+  atomic reembedding, rollback, paid failure/interruption checkpoints, observer
+  lifetime, partial evaluation/resume and frozen timeout reconciliation.
+- `npm ci`, `npm run check`, `npm run build`, `npm run lint`: passed.
+  Playwright: **9 passed**, including source status/version, independent table
+  context offsets and separate limitations. Browser tests use MOCK HTTP/SSE.
+- `nginx:1.28.0-alpine nginx -t` with the actual nginx configuration: passed.
+  `docker compose config --quiet` with synthetic example configuration: passed;
+  the temporary `.env` copy was removed. No application Compose stack was started.
+- `python -m ragagent.reindex --help` and `git diff --check`: passed.
+- Model/provider tests use scripted mocks or an intercepted SDK transport with
+  offline model/cost-map settings. Network permission was needed for local IPC,
+  test PostgreSQL/Redis and Docker; no paid provider or model-weight download was
+  used. Disposable test services and temporary config are not a deployment.
+
+### Limits and required operator work
+
+- Real Docling extraction of scientific PDFs, real embedding/reranker/model
+  inference, provider billing totals, adversarial prompt resistance, human gold
+  evaluation and the complete application image/deployment remain unverified.
+  Passing mocks/contracts is not a scientific benchmark or release acceptance.
+- The environment did not provide approved Hugging Face metadata/weight access;
+  no default SHA was guessed. Cross-process reproduction requires the actual
+  recorded SHA, cached weights/provider access and an annotated evaluation corpus.
+- Existing local fingerprints require migration and explicit reembedding. Old
+  chunks do not gain corrected numeric cuts or missing table/paragraph context
+  from reembedding; rebuild from original PDFs with new relevance annotations.
+  The upload API reuses matching checksums and has no in-place rechunking route;
+  use a separate fresh corpus/database while retaining the original corpus.
+- Source status stays unknown until manually verified. There is no automatic
+  retraction feed, and old completed reports do not refresh after status edits.
+- Synchronous search/provider-test usage exists in responses only; reindex
+  usage exists in stdout only. Lost responses/stdout or process termination
+  cannot recover those fees from the persistent worker/evaluation ledger.
+- Evaluation resumes completed cases/modes, not interrupted graph internals;
+  timeouts bound duration, not currency. Shared/public deployment authentication
+  and backend non-root/container hardening are not implemented by this repair.
+
+### Changed files
+
+- `.env.example`
+- `README.md`
+- `config/agents.yaml`
+- `docker/nginx.conf`
+- `docs/adr/0006-review-corrections.md`
+- `docs/adr/README.md`
+- `docs/agents.md`
+- `docs/api.md`
+- `docs/data-model.md`
+- `docs/deployment.md`
+- `docs/evaluation.md`
+- `docs/retrieval.md`
+- `docs/stage-log.md`
+- `frontend/src/Knowledge.tsx`
+- `frontend/src/Tasks.tsx`
+- `frontend/src/api.ts`
+- `frontend/src/components.tsx`
+- `frontend/tests/ui.spec.ts`
+- `frontend/vite.config.ts`
+- `migrations/versions/0003_paper_source_identity.py`
+- `src/ragagent/api/app.py`
+- `src/ragagent/api/evaluations.py`
+- `src/ragagent/api/papers.py`
+- `src/ragagent/api/providers.py`
+- `src/ragagent/api/queue.py`
+- `src/ragagent/api/schemas.py`
+- `src/ragagent/api/security.py`
+- `src/ragagent/db/models.py`
+- `src/ragagent/domain/documents.py`
+- `src/ragagent/domain/research.py`
+- `src/ragagent/evaluation/artifacts.py`
+- `src/ragagent/evaluation/generation.py`
+- `src/ragagent/evaluation/retrieval.py`
+- `src/ragagent/evaluation/schema.py`
+- `src/ragagent/graphs/rag.py`
+- `src/ragagent/graphs/research.py`
+- `src/ragagent/graphs/state.py`
+- `src/ragagent/ingestion/arxiv.py`
+- `src/ragagent/ingestion/chunker.py`
+- `src/ragagent/ingestion/parser.py`
+- `src/ragagent/ingestion/reembed.py`
+- `src/ragagent/ingestion/service.py`
+- `src/ragagent/jobs.py`
+- `src/ragagent/providers/chat.py`
+- `src/ragagent/providers/config.py`
+- `src/ragagent/providers/embedding.py`
+- `src/ragagent/providers/model_identity.py`
+- `src/ragagent/reindex.py`
+- `src/ragagent/retrieval/evidence.py`
+- `src/ragagent/retrieval/reranker.py`
+- `src/ragagent/retrieval/service.py`
+- `src/ragagent/settings.py`
+- `src/ragagent/worker.py`
+- `tests/integration/test_evaluation.py`
+- `tests/integration/test_graph_execution.py`
+- `tests/integration/test_migrations.py`
+- `tests/integration/test_reembed.py`
+- `tests/integration/test_source_identity.py`
+- `tests/integration/test_usage_persistence.py`
+- `tests/unit/test_api_accounting.py`
+- `tests/unit/test_api_security.py`
+- `tests/unit/test_arxiv_source.py`
+- `tests/unit/test_chunker.py`
+- `tests/unit/test_citation_pairs.py`
+- `tests/unit/test_embedding_usage.py`
+- `tests/unit/test_evaluation.py`
+- `tests/unit/test_evaluation_accounting.py`
+- `tests/unit/test_generation_evaluation.py`
+- `tests/unit/test_graphs.py`
+- `tests/unit/test_job_timeout.py`
+- `tests/unit/test_model_identity.py`
+- `tests/unit/test_multiquery_retrieval.py`
+- `tests/unit/test_parser.py`
+- `tests/unit/test_provider_config_security.py`
+- `tests/unit/test_reranker.py`
+- `tests/unit/test_retrieval.py`
+- `tests/unit/test_runtime_configuration.py`

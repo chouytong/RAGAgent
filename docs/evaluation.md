@@ -92,10 +92,76 @@ answer completeness uses the same score. This is still a
 
 Multi-agent also records verified workflow completion, retry/revision count,
 workflow latency, per-provider prompt/completion tokens and cost when the SDK
-knows prices. If any call's cost is unknown, the total is null; usage separately
+knows prices. Hosted embedding calls are included in workflow token/cost totals,
+not only chat calls; the separately instantiated judge remains excluded from
+workflow totals. If any call's cost is unknown, the total is null; usage separately
 records `known_cost` and `unknown_cost_calls`. Failed API calls may be billed
-without returning usage, so they make cost incomplete. Judge latency/usage is separate from the
+without returning usage, so they make cost incomplete. Worker usage snapshots
+persist before dispatch and after response, including in-flight unknown charges
+and returned provider model/system identities where available. Failure does not
+turn already paid calls into zero cost. Judge latency/usage is separate from the
 workflow. Retrieval-round counters do not count every expanded SQL query.
+
+## Partial results and explicit resumption
+
+Runners write an initial artifact and checkpoint after each completed or failed
+case (each case/mode for retrieval ablation), instead of waiting for the whole
+dataset. Paid-call usage updates also trigger artifact checkpoints before dispatch
+and after accounting, preserving the worker's database usage observer. A case
+failure records a safe error code and failure stage and does not
+erase earlier successful cases; generation artifacts retain available workflow
+output/evidence even when judging fails. Summary metrics include only cases with
+`evaluation_status=completed`, with evaluated/failed/pending counts displayed.
+An artifact with errors is `partial` or `failed`, not a completed benchmark.
+Both JSON and Markdown downloads are available when the Run is terminal,
+including `Run.status=failed`.
+
+A killed process may leave pending cases and `corpus_verification=pending` in
+its last checkpoint. That checkpoint remains usable for inspection, while the
+Run records interruption and available usage; it must not be reported as a fully
+verified evaluation. The in-progress case is not checkpoint-resumed internally.
+
+Submit the same endpoint and dataset again with the previous terminal Run ID:
+
+```json
+{
+  "dataset": {"...": "the same complete, annotated dataset object"},
+  "resume_run_id": "00000000-0000-0000-0000-000000000000"
+}
+```
+
+Replace the illustrative dataset object and UUID with the real values. Resumption
+creates a new Run and retains only successful case checkpoints; failed/pending
+cases execute again. Kind, canonical dataset hash, source hash, instantiated
+adapter model configuration, workflow/retrieval/judge configuration and available
+corpus snapshot must match.
+Missing artifacts, a nonterminal/wrong-kind prior Run, unavailable corpus identity
+or a previously failed corpus verification rejects resumption. A source/configuration
+change requires a fresh evaluation rather than combining incompatible results.
+
+Artifacts label usage `usage_scope=current_attempt`. Current totals describe
+only newly executed work; retained rows use `attempt_scope=resumed` and keep their
+original case usage. `previous_attempt_usage` preserves the earlier attempts'
+usage/status/timestamps as a history chain, including failure costs. Do not sum
+retained row costs into the new attempt again; account for all paid attempts using
+that history plus current-attempt usage. This distinguishes saved outputs from
+newly billed work rather than presenting a resumed batch as one fresh run.
+On resumption, prior persisted Run usage supplements the artifact's latest usage
+when available; that history entry records `usage_source=persisted_run` (otherwise
+`artifact`). This retains paid-call accounting even if a case never reached its
+result checkpoint. Completed case rows determine which work can be skipped;
+usage snapshots alone do not certify case completion.
+
+This durable accounting applies to queued worker Runs/evaluation. Synchronous
+search/provider tests return `current_request` usage in responses only, and the
+reindex CLI prints `current_attempt_cumulative` snapshots only. They do not
+create persistent billing Runs; lost responses/stdout or process termination
+cannot recover those costs from evaluation artifacts.
+
+The evaluation RQ timeout is `EVALUATION_TIMEOUT_SECONDS` (default 7200,
+1800–86400), frozen at dispatch and shared with reconciliation. Ordinary jobs
+remain 1800 seconds; queued jobs expire after 1800 seconds and running jobs have
+120 seconds grace. Timeout bounds execution duration, not currency spending.
 
 ## Artifacts and reproducibility
 
@@ -106,6 +172,9 @@ per-query outputs/rankings, actual latency and summary. Generation results retai
 `actual_output`, `evidence`, `gold_labels`, `judge_input` and raw `judgment` as well
 as released claims, status and metrics. Evidence snapshots carry source metadata,
 exact text/offsets and scores so a download can be inspected independently.
+New source snapshots include arXiv family/version, source status and independent
+table context offsets. Unknown version/status remains explicit rather than being
+inferred from a PDF checksum or successful indexing.
 
 The manifest also freezes `source_hash`, `source_dirty`, `source_file_count`
 and `source_hash_scope` at run start. The hash identifies the actual allowlisted
@@ -120,6 +189,12 @@ execution; changing the settings file during a run does not relabel that run.
 Adapters without introspectable configuration are explicitly marked unavailable.
 Retrieval provenance records the actual embedding/reranker revisions and the
 embedder's frozen normalized API base; local adapters record no hosted base.
+Local Hub revisions resolve to immutable SHAs before inference, and directory
+models record their artifact hash. Configure the recorded SHA for later processes:
+resolving an omitted revision only freezes the current adapter, not every future
+run. Default chat mappings use a dated model name; response model identities and
+system fingerprints are recorded when the provider supplies them. Temperature 0
+and frozen identities do not guarantee deterministic remote model output.
 Fallback configuration without instantiated adapters is labeled
 `configuration_available=false`, with unavailable values null.
 For PostgreSQL-backed retrieval, the indexed corpus and metadata/vector/entity

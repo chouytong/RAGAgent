@@ -24,6 +24,9 @@ it uses the configured retriever model for expansion. Analysis returns linked
 claims and structured comparisons/contradictions. Report synthesis adds no
 LLM-generated prose. Reviewer verifies existence, spans, semantic support and
 required aspect coverage; it cannot pass an unsupported claim by assessing style.
+It returns both claim verdicts and exact `supported_pairs`. Every attached
+citation must support at least part of the claim; unknown/duplicate pairs or a
+missing pair force revision even if the claim-level verdict says supported.
 Unsupported or conflicting claim/evidence pairs force revision; supported contradictory findings can be reported with both citations. User metadata restrictions override planner
 proposals and survive expansion. Evidence is unioned/deduplicated across retries
 only after exact-span and configured rerank-threshold acceptance. Both graphs
@@ -49,6 +52,20 @@ the bounded evidence union preserves support from prior rounds even if earlier
 queries leave that window. Model-authored citation markers in claim text fail
 verification; deterministic rendering appends only validated Evidence IDs.
 Unknown, missing or duplicate semantic verifier verdicts fail closed.
+
+Retriever expansion preserves the original question/current subtask as the
+rerank target instead of favoring the first expanded query. Analysis sends exact
+quotes and source metadata once, including independently sourced table context
+when present, without repeating full chunk content. Shared drafts never become
+retrieval evidence. Paper version/source status accompany evidence; withdrawn
+or retracted sources are filtered before both retrieval channels.
+
+Worker chat and hosted-embedding usage is tracked before and after each paid call
+and persisted in its Run for success or failure; evaluation also checkpoints its
+artifact on usage updates. In-flight calls are recorded as unknown charges
+because a killed worker may not receive billing metadata. Returned provider
+model/system identities supplement configured dated model names. Retry bounds
+limit attempts; they do not guarantee a fixed currency budget.
 
 Model-based semantic verification remains fallible. This is an engineering
 control, not a guarantee of scientific correctness or human ground truth.
