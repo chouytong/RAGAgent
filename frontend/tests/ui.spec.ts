@@ -181,6 +181,8 @@ test("real EventSource reconnects with its cursor, completes and restores citati
     const dialog = page.getByRole("dialog", { name: "引用原文" });
     await expect(dialog).toContainText(evidence.quote);
     await expect(dialog).toContainText("Chunk: chunk-1");
+    await expect(dialog).toContainText("来源状态未核验");
+    await expect(dialog).toContainText("版本未记录，需核对原始 PDF");
     await expect(
       dialog.getByRole("link", { name: "打开原始 PDF" }),
     ).toHaveAttribute("href", "/api/papers/paper-1/pdf#page=7");
@@ -196,6 +198,185 @@ test("real EventSource reconnects with its cursor, completes and restores citati
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+test("citations preserve version and separate auxiliary source text and limitations", async ({
+  page,
+}) => {
+  const tableEvidence = {
+    ...evidence,
+    paper: {
+      ...evidence.paper,
+      arxiv_id: "2408.09869v3",
+      arxiv_family_id: "2408.09869",
+      arxiv_version: 3,
+      source_status: "retracted",
+    },
+    source_spans: [
+      {
+        source_id: "table-body",
+        span_start: 120,
+        span_end: 160,
+        chunk_start: 0,
+        chunk_end: 40,
+      },
+    ],
+    source_context: [
+      {
+        source_id: "table-header",
+        element_type: "table_header",
+        section_path: ["Results", "Evaluation"],
+        page_start: 6,
+        page_end: 6,
+        content: "Method | Accuracy (%)",
+        quote: "Method | Accuracy (%)",
+        span_start: 0,
+        span_end: 21,
+        source_offset: 30,
+      },
+    ],
+  };
+  const tableCompleted = {
+    ...completed,
+    result: {
+      ...completed.result,
+      reranked_evidence: [tableEvidence],
+      limitations: ["MOCK unverified causal interpretation"],
+    },
+  };
+  await page.route("**/api/rag/query", (route) =>
+    route.fulfill({ status: 202, json: run }),
+  );
+  await page.route("**/api/runs/*/events", (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      body: done(tableCompleted),
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "RAG", exact: true }).click();
+  await page.getByLabel("研究问题").fill("MOCK table question");
+  await page.getByRole("button", { name: "开始", exact: true }).click();
+  const limitations = page.getByRole("complementary", {
+    name: "未验证项与局限",
+  });
+  await expect(limitations).toContainText("尚未验证");
+  await expect(limitations).toContainText(
+    "MOCK unverified causal interpretation",
+  );
+  await expect(page.locator(".report")).not.toContainText(
+    "MOCK unverified causal interpretation",
+  );
+  await page.getByRole("button", { name: "文献 · p.7" }).click();
+  const dialog = page.getByRole("dialog", { name: "引用原文" });
+  await expect(dialog).toContainText("arXiv: 2408.09869v3");
+  await expect(dialog).toContainText("冻结版本：v3");
+  await expect(dialog.getByRole("alert")).toContainText("来源已撤稿");
+  await expect(dialog.getByLabel("主引用原文", { exact: true })).toHaveText(
+    evidence.quote,
+  );
+  await expect(dialog.getByLabel("辅助引用原文", { exact: true })).toHaveText(
+    "Method | Accuracy (%)",
+  );
+  await expect(dialog.getByLabel("辅助原文", { exact: true })).toContainText(
+    "Results / Evaluation · p.6–6",
+  );
+  await expect(dialog.getByLabel("辅助原文", { exact: true })).toContainText(
+    "来源：table-header · 原文字符 30–51",
+  );
+  await expect(
+    dialog.getByRole("link", { name: "打开辅助片段所在 PDF 页" }),
+  ).toHaveAttribute("href", "/api/papers/paper-1/pdf#page=6");
+  await dialog.getByText("主引用来源定位", { exact: true }).click();
+  await expect(dialog).toContainText("来源：table-body · 原文字符 120–160");
+});
+
+test("research limitations are visible outside the reviewed report", async ({
+  page,
+}) => {
+  const researchRun = { ...run, kind: "research" };
+  await page.route("**/api/research", (route) =>
+    route.fulfill({ status: 202, json: researchRun }),
+  );
+  await page.route("**/api/runs/*/events", (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      body: done({
+        ...researchRun,
+        status: "completed",
+        result: {
+          draft_report: "MOCK reviewed research report",
+          evidence_pool: [],
+          analysis_results: [
+            { limitations: ["MOCK unverified external validity"] },
+            { limitations: ["MOCK unverified external validity"] },
+          ],
+        },
+      }),
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByLabel("研究问题").fill("MOCK research question");
+  await page.getByRole("button", { name: "开始", exact: true }).click();
+  await expect(page.locator(".report")).toHaveText(
+    "MOCK reviewed research report",
+  );
+  await expect(
+    page
+      .getByRole("complementary", { name: "未验证项与局限" })
+      .getByRole("listitem"),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("complementary", { name: "未验证项与局限" }),
+  ).toContainText("MOCK unverified external validity");
+});
+
+test("knowledge source status can be manually saved without changing ingestion status", async ({
+  page,
+}) => {
+  let paper = {
+    id: "paper-1",
+    title: "MOCK versioned paper",
+    authors: [],
+    year: 2024,
+    venue: null,
+    status: "indexed",
+    error_code: null,
+    chunk_count: 1,
+    arxiv_id: "2408.09869v2",
+    arxiv_family_id: "2408.09869",
+    arxiv_version: 2,
+    source_status: "unknown",
+  };
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/papers?*", (route) =>
+    route.fulfill({ json: [paper] }),
+  );
+  await page.route("**/api/papers/paper-1", (route) => {
+    submitted = route.request().postDataJSON();
+    paper = { ...paper, source_status: String(submitted?.source_status) };
+    return route.fulfill({ json: paper });
+  });
+  await page.goto("/");
+  const row = page.locator("tbody tr");
+  await expect(row).toContainText("来源状态未核验");
+  await expect(row).toContainText("冻结版本：v2");
+  await row
+    .getByRole("combobox", { name: "MOCK versioned paper 来源状态" })
+    .selectOption("withdrawn");
+  await row
+    .getByRole("button", { name: "保存 MOCK versioned paper 来源状态" })
+    .click();
+  await expect.poll(() => submitted).toEqual({ source_status: "withdrawn" });
+  await expect(
+    page.getByText("MOCK versioned paper：来源状态已保存", { exact: true }),
+  ).toBeVisible();
+  await expect(row.getByRole("alert")).toContainText("来源已撤回");
+  await expect(row).toContainText("indexed · 1 chunks");
+  await expect(
+    row.getByRole("button", { name: "保存 MOCK versioned paper 来源状态" }),
+  ).toBeDisabled();
 });
 
 test("provider tests require an explicitly saved mapping", async ({ page }) => {

@@ -71,6 +71,14 @@ export function Tasks({ research }: { research: boolean }) {
     }
   }
   const result = run?.result;
+  const limitations = [
+    ...new Set([
+      ...(result?.limitations ?? []),
+      ...(result?.analysis_results.flatMap(
+        (analysis) => analysis.limitations,
+      ) ?? []),
+    ]),
+  ];
   const plan =
     result?.research_plan ??
     events.find((e) => e.node === "plan")?.payload.research_plan;
@@ -126,6 +134,16 @@ export function Tasks({ research }: { research: boolean }) {
             text={result.answer ?? result.draft_report ?? ""}
             evidence={result.evidence_pool ?? result.reranked_evidence ?? []}
           />
+          {limitations.length > 0 && (
+            <aside aria-label="未验证项与局限">
+              <h3>未验证项与局限（尚未验证）</h3>
+              <ul>
+                {limitations.map((limitation) => (
+                  <li key={limitation}>{limitation}</li>
+                ))}
+              </ul>
+            </aside>
+          )}
           {result.review_result != null && (
             <details open>
               <summary>Reviewer Result</summary>

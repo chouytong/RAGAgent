@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Paper, Run, api } from "./api";
+import type { SourceStatus } from "./api";
+import { SourceProvenance, sourceStatusLabels } from "./components";
 const pageSize = 50;
 export function Knowledge() {
   const [papers, setPapers] = useState<z.infer<typeof Paper>[]>([]),
@@ -10,7 +12,10 @@ export function Knowledge() {
     [task, setTask] = useState(""),
     [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(false),
+    [sourceEdits, setSourceEdits] = useState<Record<string, SourceStatus>>({}),
+    [savingPaper, setSavingPaper] = useState<string | null>(null),
+    [sourceNotice, setSourceNotice] = useState("");
   const requestSequence = useRef(0);
   async function refresh(pageOffset = offset, signal?: AbortSignal) {
     const sequence = ++requestSequence.current;
@@ -74,6 +79,33 @@ export function Knowledge() {
       setBusy(false);
     }
   }
+  async function saveSourceStatus(paper: z.infer<typeof Paper>) {
+    setSavingPaper(paper.id);
+    setError("");
+    setSourceNotice("");
+    try {
+      const updated = await api(
+        `/api/papers/${paper.id}`,
+        Paper,
+        { source_status: sourceEdits[paper.id] ?? paper.source_status },
+        "PATCH",
+      );
+      setPapers((items) =>
+        items.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setSourceEdits((edits) => {
+        const remaining = { ...edits };
+        delete remaining[paper.id];
+        return remaining;
+      });
+      setSourceNotice(`${updated.title}：来源状态已保存`);
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingPaper(null);
+    }
+  }
   return (
     <section>
       <h2>Knowledge Base</h2>
@@ -120,6 +152,10 @@ export function Knowledge() {
       </div>
       {task && <p>后台任务：{task}。首次解析和模型加载可能需要数分钟。</p>}
       {error && <p role="alert">{error}</p>}
+      {sourceNotice && <p role="status">{sourceNotice}</p>}
+      <p>
+        来源状态需人工核对；indexed 仅表示已建立索引，不代表来源状态已核验。
+      </p>
       <div className="inline" aria-label="文献分页">
         <button disabled={loading} onClick={() => void refresh()}>
           刷新
@@ -158,11 +194,45 @@ export function Knowledge() {
                   {p.title}
                 </a>
                 <small>{p.id}</small>
+                <SourceProvenance source={p} />
               </td>
               <td>
                 {p.authors.join("; ")}
                 <br />
                 {p.year} · {p.venue}
+                <label>
+                  来源状态（人工核对）
+                  <select
+                    aria-label={`${p.title} 来源状态`}
+                    value={sourceEdits[p.id] ?? p.source_status}
+                    disabled={savingPaper === p.id}
+                    onChange={(event) =>
+                      setSourceEdits((edits) => ({
+                        ...edits,
+                        [p.id]: event.target.value as SourceStatus,
+                      }))
+                    }
+                  >
+                    {Object.entries(sourceStatusLabels).map(
+                      ([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                <button
+                  aria-label={`保存 ${p.title} 来源状态`}
+                  disabled={
+                    savingPaper !== null ||
+                    sourceEdits[p.id] === undefined ||
+                    sourceEdits[p.id] === p.source_status
+                  }
+                  onClick={() => void saveSourceStatus(p)}
+                >
+                  {savingPaper === p.id ? "正在保存…" : "保存来源状态"}
+                </button>
               </td>
               <td>
                 {p.status} · {p.chunk_count} chunks
