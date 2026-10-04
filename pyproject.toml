@@ -7,9 +7,9 @@ license = "MIT"
 dependencies = [
   "fastapi==0.142.2", "uvicorn[standard]>=0.35,<1", "pydantic>=2.12,<3",
   "pydantic-settings>=2.10,<3", "sqlalchemy>=2.0.43,<3", "alembic>=1.16,<2",
-  "psycopg[binary]>=3.2,<4", "pgvector==0.5.0", "redis>=6,<8", "rq>=2.5,<3",
+  "psycopg[binary]>=3.2,<4", "pgvector==0.5.0", "redis>=6,<8", "rq>=2.12,<3",
   "langgraph==1.2.12", "litellm==1.103.2", "httpx>=0.28,<1",
-  "python-multipart>=0.0.20,<1", "pyyaml>=6,<7", "tenacity>=9,<10",
+  "python-multipart>=0.0.20,<1", "pyyaml>=6,<7", "tenacity>=9,<10", "python-dotenv>=1,<2",
 ]
 [project.optional-dependencies]
 parsing = ["docling==2.133.0"]

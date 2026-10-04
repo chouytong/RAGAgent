@@ -1,11 +1,10 @@
-import os
-
 from fastapi import APIRouter, HTTPException
 
 from ragagent.api.schemas import HealthResult, ProviderTest
 from ragagent.errors import ApplicationError
 from ragagent.providers.chat import LiteLLMProvider
 from ragagent.providers.config import ProviderConfig, load_config
+from ragagent.providers.environment import runtime_value
 from ragagent.settings import get_settings
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
@@ -19,7 +18,7 @@ def providers() -> dict[str, object]:
         model = getattr(config.agents, name)
         agents[name] = {
             **model.model_dump(),
-            "key_configured": bool(os.environ.get(model.key_environment))
+            "key_configured": bool(runtime_value(model.key_environment))
             if model.key_environment
             else True,
         }

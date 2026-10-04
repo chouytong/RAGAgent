@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from typing import Any, Protocol
 
 from ragagent.domain.research import Candidate
@@ -12,15 +13,23 @@ class Reranker(Protocol):
 
 
 class CrossEncoderReranker:
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, revision: str | None = None) -> None:
         self.model_name = model
+        self.revision = revision
         self._model: Any = None
+        self._load_lock = threading.Lock()
 
     def _rank(self, query: str, candidates: list[Candidate], top_k: int) -> list[Candidate]:
         from sentence_transformers import CrossEncoder
 
         if self._model is None:
-            self._model = CrossEncoder(self.model_name)
+            with self._load_lock:
+                if self._model is None:
+                    self._model = (
+                        CrossEncoder(self.model_name)
+                        if self.revision is None
+                        else CrossEncoder(self.model_name, revision=self.revision)
+                    )
         scores = self._model.predict([(query, c.evidence.content) for c in candidates]).tolist()
         ranked = [
             Candidate(

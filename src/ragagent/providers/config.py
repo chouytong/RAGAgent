@@ -1,4 +1,3 @@
-import os
 import re
 from pathlib import Path
 from typing import Literal
@@ -8,6 +7,7 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 from ragagent.errors import ConfigurationError
+from ragagent.providers.environment import runtime_value
 
 
 class AgentModel(BaseModel):
@@ -63,7 +63,9 @@ class ProviderConfig(BaseModel):
 def load_config(path: Path) -> ProviderConfig:
     def substitute(match: re.Match[str]) -> str:
         name, _, default = match.group(1).partition(":-")
-        value = os.environ.get(name, default)
+        value = runtime_value(name)
+        if value is None:
+            value = default
         if not value:
             raise ConfigurationError("missing_model_environment")
         return value

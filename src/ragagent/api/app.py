@@ -5,16 +5,20 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from rq import Queue, Worker
+from sqlalchemy import text
 
 from ragagent.api import evaluations, papers, providers, runs
 from ragagent.api.dependencies import get_search
+from ragagent.api.dispatcher import dispatcher_lifespan
 from ragagent.api.papers import DB
+from ragagent.api.queue import RQQueue
 from ragagent.api.schemas import QueryRequest
 from ragagent.domain.research import QueryPlan, SearchResult
 from ragagent.errors import ApplicationError
 from ragagent.observability import configure_logging
 
-app = FastAPI(title="Scientific RAGAgent", version="0.1.0")
+app = FastAPI(title="Scientific RAGAgent", version="0.1.0", lifespan=dispatcher_lifespan)
 app.include_router(papers.router)
 app.include_router(runs.router)
 app.include_router(providers.router)
@@ -58,6 +62,20 @@ async def safe_error(request: Request, exc: ApplicationError) -> JSONResponse:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/ready")
+def ready(db: DB) -> dict[str, str]:
+    try:
+        db.execute(text("SELECT 1"))
+        connection = RQQueue().connection()
+        connection.ping()
+        workers = Worker.all(connection=connection, queue=Queue("research", connection=connection))
+    except Exception:
+        raise ApplicationError("infrastructure_unavailable") from None
+    if not workers:
+        raise ApplicationError("worker_unavailable")
+    return {"status": "ready"}
 
 
 @app.post("/api/search")

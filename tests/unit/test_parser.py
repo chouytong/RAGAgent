@@ -8,6 +8,25 @@ import pytest
 from ragagent.ingestion.parser import DoclingParser
 
 
+def parse_items(monkeypatch: pytest.MonkeyPatch, items: list[Any]) -> Any:
+    class Document:
+        def iterate_items(self, traverse_pictures: bool) -> list[tuple[Any, int]]:
+            assert traverse_pictures
+            return [(i, 0) for i in items]
+
+    class Converter:
+        def convert(self, path: Path) -> Any:
+            return SimpleNamespace(document=Document())
+
+    package = ModuleType("docling")
+    package.__path__ = []
+    module = ModuleType("docling.document_converter")
+    module.DocumentConverter = Converter
+    monkeypatch.setitem(sys.modules, "docling", package)
+    monkeypatch.setitem(sys.modules, "docling.document_converter", module)
+    return DoclingParser().parse(Path("fixture.pdf"))
+
+
 def test_docling_adapter_structure_captions_tables_pages_without_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -28,24 +47,34 @@ def test_docling_adapter_structure_captions_tables_pages_without_models(
         item("formula", "L = x + y", 4),
     ]
 
-    class Document:
-        def iterate_items(self, traverse_pictures: bool) -> list[tuple[Any, int]]:
-            assert traverse_pictures
-            return [(i, 0) for i in items]
-
-    class Converter:
-        def convert(self, path: Path) -> Any:
-            return SimpleNamespace(document=Document())
-
-    package = ModuleType("docling")
-    package.__path__ = []
-    module = ModuleType("docling.document_converter")
-    module.DocumentConverter = Converter
-    monkeypatch.setitem(sys.modules, "docling", package)
-    monkeypatch.setitem(sys.modules, "docling.document_converter", module)
-    parsed = DoclingParser().parse(Path("fixture.pdf"))
+    parsed = parse_items(monkeypatch, items)
     assert parsed.elements[2].section_path == ["Methods", "Training"]
     assert parsed.elements[3].element_type == "table" and parsed.elements[3].page_start == 3
     assert parsed.elements[4].content == "Table 1: results"
     assert parsed.elements[5].content == "Figure 1: architecture"
     assert parsed.elements[6].content == "L = x + y"
+    assert parsed.elements[2].section_ids[:1] == parsed.elements[0].section_ids
+
+
+def test_repeated_heading_occurrences_keep_distinct_node_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def item(label: str, text: str, level: int = 1) -> Any:
+        return SimpleNamespace(
+            label=label, text=text, level=level, prov=[SimpleNamespace(page_no=1)]
+        )
+
+    parsed = parse_items(
+        monkeypatch,
+        [
+            item("section_header", "Experiments"),
+            item("section_header", "Results", 2),
+            item("text", "First experiment."),
+            item("section_header", "Results", 2),
+            item("text", "Second experiment."),
+        ],
+    )
+    first, second = parsed.elements[2], parsed.elements[4]
+    assert first.section_path == second.section_path == ["Experiments", "Results"]
+    assert first.section_ids[0] == second.section_ids[0]
+    assert first.section_ids[1] != second.section_ids[1]

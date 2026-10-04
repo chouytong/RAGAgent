@@ -64,12 +64,13 @@ class PaperAuthor(Base):
 
 class Section(Base):
     __tablename__ = "sections"
-    __table_args__ = (UniqueConstraint("paper_id", "path"),)
+    __table_args__ = (UniqueConstraint("paper_id", "identity", name="uq_sections_paper_identity"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     paper_id: Mapped[str] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
     parent_id: Mapped[str | None] = mapped_column(ForeignKey("sections.id"))
     title: Mapped[str] = mapped_column(Text)
     path: Mapped[str] = mapped_column(Text)
+    identity: Mapped[str] = mapped_column(Text, default=new_id)
     ordinal: Mapped[int] = mapped_column(Integer)
 
 

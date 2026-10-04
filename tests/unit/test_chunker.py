@@ -38,3 +38,14 @@ def test_chinese_tokens_and_exact_text() -> None:
     text = "科研方法。结果分析。"
     chunks = StructureChunker(5, 0).chunk(ParsedDocument(title="t", elements=[element(text, 1)]))
     assert "".join(c.content for c in chunks) == text
+
+
+def test_same_heading_occurrences_are_not_merged() -> None:
+    first = element("First experiment result.", 1)
+    first.section_ids = ["heading:0"]
+    second = element("Second experiment result.", 2)
+    second.section_ids = ["heading:1"]
+    chunks = StructureChunker().chunk(ParsedDocument(title="t", elements=[first, second]))
+    assert [c.content for c in chunks] == [first.content, second.content]
+    assert [c.section_ids for c in chunks] == [["heading:0"], ["heading:1"]]
+    assert [c.page_start for c in chunks] == [1, 2]

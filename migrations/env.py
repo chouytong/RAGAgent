@@ -1,5 +1,6 @@
 from alembic import context
 
+import ragagent.db.dispatch  # noqa: F401 - register the outbox table in metadata
 from ragagent.db.models import Base
 from ragagent.db.session import engine
 

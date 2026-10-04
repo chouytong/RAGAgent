@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from ragagent.db.models import Author, Chunk, ChunkEntity, Entity, Paper, PaperAuthor, Section
@@ -164,3 +165,42 @@ async def test_empty_corpus_does_not_call_model(empty_db: Session) -> None:
         QueryPlan(queries=["q"])
     )
     assert not result.dense and not result.lexical and not result.evidence
+
+
+@pytest.mark.integration
+async def test_author_metadata_queries_are_batched_and_not_cached_across_searches(
+    empty_db: Session,
+) -> None:
+    from typing import Any
+
+    populate(empty_db)
+    retriever = HybridRetriever(empty_db, Embedder(), FixtureReranker())
+    connection = empty_db.connection()
+    author_queries: list[str] = []
+
+    def capture(
+        connection: Any, cursor: Any, statement: str, parameters: Any, context: Any, many: bool
+    ) -> None:
+        if statement.lstrip().startswith("SELECT") and "JOIN authors ON" in statement:
+            author_queries.append(statement)
+
+    event.listen(connection, "before_cursor_execute", capture)
+    plan = QueryPlan(queries=["contrastive", "training", "retrieval"])
+    try:
+        first = await retriever.search(plan)
+        assert len(author_queries) == 1
+        assert next(e.paper.authors for e in first.evidence if e.paper.title == "Contrastive") == [
+            "Alice"
+        ]
+        author = empty_db.scalar(select(Author).where(Author.name == "Alice"))
+        assert author
+        author.name = "Alice Updated"
+        empty_db.flush()
+        author_queries.clear()
+        second = await retriever.search(plan)
+        assert len(author_queries) == 1
+        assert next(e.paper.authors for e in second.evidence if e.paper.title == "Contrastive") == [
+            "Alice Updated"
+        ]
+    finally:
+        event.remove(connection, "before_cursor_execute", capture)

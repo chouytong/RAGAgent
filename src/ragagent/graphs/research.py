@@ -11,7 +11,12 @@ from ragagent.graphs.state import (
     ReviewResult,
 )
 from ragagent.providers.chat import ChatProvider
-from ragagent.retrieval.evidence import render_claims, verify_claims
+from ragagent.retrieval.evidence import (
+    accepted_evidence,
+    merge_evidence,
+    render_claims,
+    verify_claims,
+)
 from ragagent.retrieval.service import SearchPort
 
 
@@ -36,7 +41,13 @@ def build_research(
     max_retrievals: int = 3,
     max_revisions: int = 2,
     max_iterations: int = 12,
+    *,
+    min_rerank_score: float = 0.0,
+    max_evidence_records: int = 96,
 ) -> CompiledStateGraph[MultiAgentState, None, MultiAgentState, MultiAgentState]:
+    if max_evidence_records < 1:
+        raise ValueError("evidence_budget_must_be_positive")
+
     async def plan(state: MultiAgentState) -> ResearchUpdate:
         result = await supervisor.complete(
             "Create a scientific ResearchPlan with distinct required aspects and bounded "
@@ -51,6 +62,7 @@ def build_research(
 
     async def control(state: MultiAgentState) -> ResearchUpdate:
         tasks = state.subtasks
+        completed = set(state.completed_tasks)
         update: ResearchUpdate = {}
         route = supervisor_route(state, max_retrievals, max_revisions, max_iterations)
         if (
@@ -78,16 +90,24 @@ def build_research(
             )
             for task in revised.subtasks:
                 task.filters = constrain_filters(task.filters, state.filters)
+            previous = {task.task_id: task for task in state.subtasks}
+            completed = {
+                task.task_id
+                for task in revised.subtasks
+                if task.task_id in completed and previous.get(task.task_id) == task
+            }
             tasks = revised.subtasks
             update["research_plan"] = revised
             update["subtasks"] = tasks
             update["iteration"] = state.iteration + 1
-        pending = [s.task_id for s in tasks if s.task_id not in state.completed_tasks]
+            update["completed_tasks"] = sorted(completed)
+        pending = [s.task_id for s in tasks if s.task_id not in completed]
         update["current_tasks"] = pending or [s.task_id for s in tasks]
         return update
 
     async def retrieve(state: MultiAgentState) -> ResearchUpdate:
-        pool = {e.evidence_id: e for e in state.evidence_pool}
+        pool = accepted_evidence(state.evidence_pool, min_rerank_score)
+        exhausted = False
         completed = set(state.completed_tasks)
         updated_tasks = []
         for task in state.subtasks:
@@ -115,17 +135,24 @@ def build_research(
                     filters=task.filters,
                 )
             )
-            if result.evidence:
+            evidence = accepted_evidence(result.evidence, min_rerank_score)
+            pool, over_budget = merge_evidence(
+                pool, evidence, min_rerank_score, max_evidence_records
+            )
+            retained = {item.evidence_id for item in pool}
+            if any(item.evidence_id in retained for item in evidence):
                 completed.add(task.task_id)
-            for evidence in result.evidence:
-                pool[evidence.evidence_id] = evidence
+            exhausted = exhausted or over_budget
         return {
-            "evidence_pool": list(pool.values()),
+            "evidence_pool": pool,
             "completed_tasks": sorted(completed),
             "subtasks": updated_tasks,
             "retrieval_count": state.retrieval_count + 1,
             "iteration": state.iteration + 1,
             "status": "analyzing",
+            "errors": list(
+                dict.fromkeys(state.errors + (["evidence_budget_exhausted"] if exhausted else []))
+            ),
         }
 
     async def analyze(state: MultiAgentState) -> ResearchUpdate:
@@ -137,6 +164,7 @@ def build_research(
                 "Extract structured facts only from supplied evidence. Compare methods, "
                 "datasets and metrics, detect contradictory findings. Every factual claim "
                 "must include existing evidence IDs and an exact required aspect. "
+                "Keep citation markers out of claim text; use only the evidence_ids field. "
                 "Do not invent facts; add unsupported questions to limitations. "
                 "Revise prior claims using reviewer feedback when provided.",
                 {

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -9,6 +10,12 @@ from ragagent.db.models import Chunk, Paper, Section, new_id
 from ragagent.ingestion.chunker import StructureChunker
 from ragagent.ingestion.parser import Parser
 from ragagent.providers.ports import Embedder
+
+
+def section_identity(path: list[str], node_ids: list[str]) -> str:
+    # A structural encoding avoids collisions between a heading containing " / "
+    # and an actual parent/child path. Node IDs additionally preserve occurrences.
+    return json.dumps(["nodes", node_ids] if node_ids else ["path", path], ensure_ascii=False)
 
 
 async def ingest(
@@ -34,26 +41,31 @@ async def ingest(
     for draft, vector in zip(drafts, vectors, strict=True):
         for depth in range(1, len(draft.section_path) + 1):
             path = " / ".join(draft.section_path[:depth])
-            if path not in sections:
-                parent = " / ".join(draft.section_path[: depth - 1])
+            identity = section_identity(draft.section_path[:depth], draft.section_ids[:depth])
+            if identity not in sections:
+                parent = section_identity(
+                    draft.section_path[: depth - 1], draft.section_ids[: depth - 1]
+                )
                 section_id = new_id()
                 session.add(
                     Section(
                         id=section_id,
                         paper_id=paper.id,
-                        parent_id=sections.get(parent),
+                        parent_id=sections.get(parent) if depth > 1 else None,
                         title=draft.section_path[depth - 1],
                         path=path,
+                        identity=identity,
                         ordinal=len(sections),
                     )
                 )
                 session.flush()
-                sections[path] = section_id
+                sections[identity] = section_id
         path = " / ".join(draft.section_path)
+        identity = section_identity(draft.section_path, draft.section_ids)
         session.add(
             Chunk(
                 paper_id=paper.id,
-                section_id=sections[path],
+                section_id=sections[identity],
                 section_path=path,
                 page_start=draft.page_start,
                 page_end=draft.page_end,
@@ -62,7 +74,7 @@ async def ingest(
                 token_count=draft.token_count,
                 ordinal=draft.ordinal,
                 embedding=vector,
-                metadata_json={"parser": type(parser).__name__},
+                metadata_json={"parser": type(parser).__name__, "section_ids": draft.section_ids},
             )
         )
     parse_path = Path(paper.original_path).with_suffix(".parsed.json")

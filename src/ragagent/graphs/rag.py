@@ -5,7 +5,7 @@ from ragagent.domain.research import AnswerDraft, QueryExpansion, QueryPlan, Suf
 from ragagent.graphs.common import constrain_filters
 from ragagent.graphs.state import RAGState, RAGUpdate
 from ragagent.providers.chat import ChatProvider
-from ragagent.retrieval.evidence import evidence_gate, render_claims, verify_claims
+from ragagent.retrieval.evidence import evidence_gate, merge_evidence, render_claims, verify_claims
 from ragagent.retrieval.service import SearchPort
 
 
@@ -17,7 +17,12 @@ def build_rag(
     reviewer: ChatProvider,
     max_retries: int = 2,
     min_rerank_score: float = 0.0,
+    *,
+    max_evidence_records: int = 48,
 ) -> CompiledStateGraph[RAGState, None, RAGState, RAGState]:
+    if max_evidence_records < 1:
+        raise ValueError("evidence_budget_must_be_positive")
+
     async def plan(state: RAGState) -> RAGUpdate:
         result = await planner.complete(
             "Plan an internal scientific literature search. Identify question type and all "
@@ -31,17 +36,21 @@ def build_rag(
     async def retrieve(state: RAGState) -> RAGUpdate:
         assert state.query_plan is not None
         result = await search.search(state.query_plan)
-        gate = evidence_gate(
-            state.query_plan, result.evidence, minimum_rerank_score=min_rerank_score
+        evidence, exhausted = merge_evidence(
+            state.reranked_evidence, result.evidence, min_rerank_score, max_evidence_records
         )
+        gate = evidence_gate(state.query_plan, evidence, minimum_rerank_score=min_rerank_score)
         return {
             "retrieved_candidates": result.fused,
-            "reranked_evidence": result.evidence,
+            "reranked_evidence": evidence,
             "sufficiency": gate,
             "retrieval_attempt": state.retrieval_attempt + 1,
             "claims": [],
             "answer": "",
             "citation_validation": None,
+            "errors": list(
+                dict.fromkeys(state.errors + (["evidence_budget_exhausted"] if exhausted else []))
+            ),
         }
 
     def after_retrieve(state: RAGState) -> str:
@@ -55,6 +64,7 @@ def build_rag(
         result = await analyst.complete(
             "Answer only using supplied evidence. Each factual claim must cite existing "
             "evidence_ids and exactly one required aspect. Do not infer facts from memory. "
+            "Keep citation markers out of claim text; use only the evidence_ids field. "
             "For unsupported aspects omit claims and state limitations.",
             {
                 "query": state.query,
@@ -77,15 +87,16 @@ def build_rag(
         gate = evidence_gate(
             state.query_plan, state.reranked_evidence, validation, min_rerank_score
         )
+        complete = validation.valid and gate.status == Sufficiency.SUFFICIENT
         return {
             "citation_validation": validation,
             "sufficiency": gate,
-            "status": "completed" if validation.valid else "retrieving",
-            "answer": render_claims(state.claims) if validation.valid else "",
+            "status": "completed" if complete else "retrieving",
+            "answer": render_claims(state.claims) if complete else "",
         }
 
     def after_verify(state: RAGState) -> str:
-        if state.citation_validation and state.citation_validation.valid:
+        if state.status == "completed":
             return END
         return "expand" if state.retrieval_attempt <= max_retries else "refuse"
 

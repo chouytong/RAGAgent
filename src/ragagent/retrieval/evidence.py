@@ -13,6 +13,7 @@ from ragagent.domain.research import (
 from ragagent.providers.chat import ChatProvider
 
 CITATION = re.compile(r"\[E:([0-9a-f-]{36})\]")
+INLINE_CITATION = re.compile(r"\[E:[^\]]*(?:\]|$)", re.IGNORECASE)
 
 
 def parse_citations(text: str) -> list[str]:
@@ -24,6 +25,31 @@ def exact_span(evidence: EvidenceRecord) -> bool:
         0 <= evidence.span_start < evidence.span_end <= len(evidence.content)
         and evidence.content[evidence.span_start : evidence.span_end] == evidence.quote
     )
+
+
+def accepted_evidence(
+    evidence: list[EvidenceRecord], minimum_rerank_score: float = 0.0
+) -> list[EvidenceRecord]:
+    """Return only evidence eligible for generation and citation verification."""
+    by_id: dict[str, EvidenceRecord] = {}
+    for item in evidence:
+        score = item.scores.get("rerank")
+        if exact_span(item) and score is not None and score >= minimum_rerank_score:
+            by_id.setdefault(item.evidence_id, item)
+    return list(by_id.values())
+
+
+def merge_evidence(
+    previous: list[EvidenceRecord],
+    incoming: list[EvidenceRecord],
+    minimum_rerank_score: float,
+    max_records: int,
+) -> tuple[list[EvidenceRecord], bool]:
+    """Keep accepted prior evidence before adding new records within a fixed budget."""
+    if max_records < 1:
+        raise ValueError("evidence_budget_must_be_positive")
+    combined = accepted_evidence(previous + incoming, minimum_rerank_score)
+    return combined[:max_records], len(combined) > max_records
 
 
 async def verify_claims(
@@ -41,7 +67,9 @@ async def verify_claims(
     invalid = [
         c.claim_id
         for c in claims
-        if not c.evidence_ids or any(eid not in by_id for eid in c.evidence_ids)
+        if INLINE_CITATION.search(c.text)
+        or not c.evidence_ids
+        or any(eid not in by_id for eid in c.evidence_ids)
     ]
     eligible = [c for c in claims if c.claim_id not in invalid]
     verdicts: list[ClaimVerdict] = [
@@ -50,6 +78,7 @@ async def verify_claims(
     ]
     model_missing: list[str] = []
     if eligible:
+        cited_ids = {eid for claim in eligible for eid in claim.evidence_ids}
         response = await provider.complete(
             "Verify each claim only against its cited exact quotes. Check numeric values, "
             "comparative statements, scope and contradictions. Reject unsupported inference. "
@@ -59,7 +88,9 @@ async def verify_claims(
                 "question": question,
                 "required_aspects": aspects,
                 "claims": [c.model_dump() for c in eligible],
-                "evidence": [e.model_dump() for e in by_id.values()],
+                "evidence": [
+                    by_id[eid].model_dump(exclude={"content"}) for eid in sorted(cited_ids)
+                ],
             },
             VerificationResponse,
         )
@@ -69,15 +100,18 @@ async def verify_claims(
         grouped: dict[str, list[ClaimVerdict]] = {}
         for v in response.verdicts:
             grouped.setdefault(v.claim_id, []).append(v)
+        unexpected = set(grouped) - {c.claim_id for c in eligible}
         for c in eligible:
             matched = grouped.get(c.claim_id, [])
             verdicts.append(
                 matched[0]
-                if len(matched) == 1
+                if len(matched) == 1 and not unexpected
                 else ClaimVerdict(
                     claim_id=c.claim_id,
                     supported=False,
-                    reason="verifier_missing_or_duplicate_verdict",
+                    reason="verifier_unknown_verdict"
+                    if unexpected
+                    else "verifier_missing_or_duplicate_verdict",
                 )
             )
     supported = {v.claim_id for v in verdicts if v.supported and not v.contradiction}
@@ -97,11 +131,7 @@ def evidence_gate(
     validation: CitationValidation | None = None,
     minimum_rerank_score: float = 0.0,
 ) -> EvidenceSufficiencyResult:
-    unique = {
-        e.chunk_id: e
-        for e in evidence
-        if exact_span(e) and e.scores.get("rerank", minimum_rerank_score) >= minimum_rerank_score
-    }
+    unique = {e.chunk_id: e for e in accepted_evidence(evidence, minimum_rerank_score)}
     papers = {e.paper.paper_id for e in unique.values()}
     reasons: list[str] = []
     status = Sufficiency.SUFFICIENT
@@ -134,5 +164,8 @@ def evidence_gate(
 
 def render_claims(claims: list[Claim]) -> str:
     return "\n\n".join(
-        f"{c.text} " + " ".join(f"[E:{eid}]" for eid in c.evidence_ids) for c in claims
+        INLINE_CITATION.sub("", c.text).strip()
+        + " "
+        + " ".join(f"[E:{eid}]" for eid in c.evidence_ids)
+        for c in claims
     )

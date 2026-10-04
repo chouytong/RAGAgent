@@ -19,16 +19,8 @@ from ragagent.retrieval.fusion import RRFusion
 from ragagent.retrieval.reranker import Reranker
 
 
-def record(session: Session, chunk: Chunk, paper: Paper, score: float, source: str) -> Candidate:
+def record(chunk: Chunk, paper: Paper, score: float, source: str, authors: list[str]) -> Candidate:
     eid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"chunk:{chunk.id}:0:{len(chunk.content)}"))
-    authors = list(
-        session.scalars(
-            select(Author.name)
-            .join(PaperAuthor)
-            .where(PaperAuthor.paper_id == paper.id)
-            .order_by(PaperAuthor.position)
-        )
-    )
     evidence = EvidenceRecord(
         evidence_id=eid,
         paper=PaperMetadata(
@@ -53,11 +45,39 @@ def record(session: Session, chunk: Chunk, paper: Paper, score: float, source: s
     return Candidate(evidence=evidence, score=score)
 
 
+def records(
+    session: Session,
+    rows: list[tuple[Chunk, Paper, float]],
+    source: str,
+    author_cache: dict[str, list[str]] | None = None,
+) -> list[Candidate]:
+    cache = {} if author_cache is None else author_cache
+    missing = {paper.id for _, paper, _ in rows} - cache.keys()
+    if missing:
+        for paper_id in missing:
+            cache[paper_id] = []
+        authors = session.execute(
+            select(PaperAuthor.paper_id, Author.name)
+            .join(Author)
+            .where(PaperAuthor.paper_id.in_(missing))
+            .order_by(PaperAuthor.paper_id, PaperAuthor.position)
+        )
+        for paper_id, name in authors:
+            cache[paper_id].append(name)
+    return [record(chunk, paper, score, source, cache[paper.id]) for chunk, paper, score in rows]
+
+
 class DenseRetriever:
     def __init__(self, session: Session, embedder: Embedder) -> None:
         self.session, self.embedder = session, embedder
 
-    async def search(self, query: str, filters: MetadataFilter, top_n: int) -> list[Candidate]:
+    async def search(
+        self,
+        query: str,
+        filters: MetadataFilter,
+        top_n: int,
+        author_cache: dict[str, list[str]] | None = None,
+    ) -> list[Candidate]:
         # Apply metadata restrictions before loading or calling an embedding model.
         probe = (
             select(Chunk, Paper, literal(0.0))
@@ -75,17 +95,21 @@ class DenseRetriever:
             .where(Paper.status == "indexed", Paper.embedding_model == self.embedder.fingerprint)
         )
         statement = apply_filters(statement, filters).order_by(distance, Chunk.id).limit(top_n)
-        return [
-            record(self.session, c, p, float(s), "dense")
-            for c, p, s in self.session.execute(statement)
-        ]
+        rows = [(c, p, float(s)) for c, p, s in self.session.execute(statement)]
+        return records(self.session, rows, "dense", author_cache)
 
 
 class LexicalRetriever:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    async def search(self, query: str, filters: MetadataFilter, top_n: int) -> list[Candidate]:
+    async def search(
+        self,
+        query: str,
+        filters: MetadataFilter,
+        top_n: int,
+        author_cache: dict[str, list[str]] | None = None,
+    ) -> list[Candidate]:
         tsquery = func.websearch_to_tsquery("english", query)
         score = func.ts_rank_cd(Chunk.search_vector, tsquery)
         statement = (
@@ -94,10 +118,8 @@ class LexicalRetriever:
             .where(Paper.status == "indexed", Chunk.search_vector.op("@@")(tsquery))
         )
         statement = apply_filters(statement, filters).order_by(score.desc(), Chunk.id).limit(top_n)
-        return [
-            record(self.session, c, p, float(s), "lexical")
-            for c, p, s in self.session.execute(statement)
-        ]
+        rows = [(c, p, float(s)) for c, p, s in self.session.execute(statement)]
+        return records(self.session, rows, "lexical", author_cache)
 
 
 class SearchPort(Protocol):
@@ -122,9 +144,14 @@ class HybridRetriever:
 
     async def search(self, plan: QueryPlan, rerank: bool = True) -> SearchResult:
         dense_lists, lexical_lists = [], []
+        author_cache: dict[str, list[str]] = {}
         for query in plan.queries:
-            dense_lists.append(await self.dense.search(query, plan.filters, self.top_n))
-            lexical_lists.append(await self.lexical.search(query, plan.filters, self.top_n))
+            dense_lists.append(
+                await self.dense.search(query, plan.filters, self.top_n, author_cache)
+            )
+            lexical_lists.append(
+                await self.lexical.search(query, plan.filters, self.top_n, author_cache)
+            )
         dense = self.fusion.fuse(dense_lists, self.top_n)
         lexical = self.fusion.fuse(lexical_lists, self.top_n)
         fused = self.fusion.fuse(dense_lists + lexical_lists, self.top_n)

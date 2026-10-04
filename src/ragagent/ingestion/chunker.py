@@ -22,6 +22,7 @@ class StructureChunker:
         for element in document.elements:
             if group and (
                 element.section_path != group[-1].section_path
+                or element.section_ids != group[-1].section_ids
                 or element.element_type != group[-1].element_type
             ):
                 result.extend(self._split(group, len(result)))
@@ -55,6 +56,7 @@ class StructureChunker:
             chunks.append(
                 ChunkDraft(
                     section_path=elements[0].section_path,
+                    section_ids=elements[0].section_ids,
                     page_start=min(e.page_start for e in covered),
                     page_end=max(e.page_end for e in covered),
                     element_type=elements[0].element_type,

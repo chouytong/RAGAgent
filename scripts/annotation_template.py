@@ -25,6 +25,7 @@ args.output.write_text(
                     "relevant_chunk_ids": [],
                     "relevant_paper_ids": [],
                     "expected_answer": "",
+                    "expected_refusal": False,
                     "notes": "",
                     "required_aspects": [],
                     "annotated_by": None,

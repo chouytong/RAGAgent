@@ -13,12 +13,11 @@ router = APIRouter(prefix="/api/evaluations", tags=["evaluations"])
 
 def submit(kind: str, request: EvaluationRequest, db: DB, queue: QueueDep) -> RunResponse:
     try:
-        request.dataset.runnable()
+        if kind == "eval_retrieval":
+            request.dataset.runnable()
+        else:
+            request.dataset.generation_runnable()
         validate_references(request.dataset, db)
-        if kind != "eval_retrieval" and any(
-            not c.expected_answer.strip() or not c.required_aspects for c in request.dataset.cases
-        ):
-            raise ValueError("generation_eval_requires_answer_and_aspect_labels")
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
     return RunResponse.model_validate(enqueue(db, queue, kind, request.model_dump()))

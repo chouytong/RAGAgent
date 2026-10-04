@@ -42,6 +42,11 @@
           "title": "Expected Answer",
           "type": "string"
         },
+        "expected_refusal": {
+          "default": false,
+          "title": "Expected Refusal",
+          "type": "boolean"
+        },
         "notes": {
           "default": "",
           "title": "Notes",
