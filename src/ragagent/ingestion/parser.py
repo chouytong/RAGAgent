@@ -45,6 +45,12 @@ class DoclingParser:
                         page_end=max(pages),
                         element_type=label,
                         content=text,
+                        source_id=getattr(item, "self_ref", None),
+                        related_source_ids=[
+                            ref.cref
+                            for ref in getattr(item, "captions", [])
+                            if hasattr(ref, "cref")
+                        ],
                     )
                 )
             if not elements:

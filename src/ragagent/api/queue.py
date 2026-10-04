@@ -28,13 +28,16 @@ class RQQueue:
             return None
 
     def submit(self, run_id: str) -> None:
+        self.submit_with_timeout(run_id, JOB_TIMEOUT_SECONDS)
+
+    def submit_with_timeout(self, run_id: str, timeout: int) -> None:
         try:
             Queue("research", connection=self.connection()).enqueue(
                 "ragagent.worker.execute",
                 run_id,
                 job_id=run_id,
                 unique=True,
-                job_timeout=JOB_TIMEOUT_SECONDS,
+                job_timeout=timeout,
                 result_ttl=0,
                 failure_ttl=86400,
                 on_failure=Callback("ragagent.worker.on_failure"),

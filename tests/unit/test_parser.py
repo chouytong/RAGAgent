@@ -78,3 +78,26 @@ def test_repeated_heading_occurrences_keep_distinct_node_ids(
     assert first.section_path == second.section_path == ["Experiments", "Results"]
     assert first.section_ids[0] == second.section_ids[0]
     assert first.section_ids[1] != second.section_ids[1]
+
+
+def test_docling_table_caption_references_are_preserved_as_distinct_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = SimpleNamespace(
+        label="table",
+        self_ref="#/tables/0",
+        captions=[SimpleNamespace(cref="#/texts/0")],
+        prov=[SimpleNamespace(page_no=2)],
+        export_to_markdown=lambda doc: "| score (%) |\n| --- |\n| 99.95 |\n",
+    )
+    caption = SimpleNamespace(
+        label="caption",
+        self_ref="#/texts/0",
+        text="Table 1: accuracy in percent.",
+        prov=[SimpleNamespace(page_no=2)],
+    )
+    parsed = parse_items(monkeypatch, [table, caption])
+    assert parsed.elements[0].source_id == "#/tables/0"
+    assert parsed.elements[0].related_source_ids == ["#/texts/0"]
+    assert parsed.elements[1].source_id == "#/texts/0"
+    assert parsed.elements[1].content == caption.text

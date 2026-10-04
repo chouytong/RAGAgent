@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from ragagent.api.schemas import HealthResult, ProviderTest
 from ragagent.errors import ApplicationError
-from ragagent.providers.chat import LiteLLMProvider
+from ragagent.providers.chat import LiteLLMProvider, usage_record
 from ragagent.providers.config import ProviderConfig, load_config
 from ragagent.providers.environment import runtime_value
 from ragagent.settings import get_settings
@@ -35,13 +36,28 @@ def update_config(config: ProviderConfig) -> dict[str, str]:
 
 
 @router.post("/test")
-async def test(request: ProviderTest) -> dict[str, object]:
+async def test(request: ProviderTest) -> JSONResponse:
     model = getattr(load_config(get_settings().agent_config).agents, request.agent)
     provider = LiteLLMProvider(model, timeout=15)
     try:
         result = await provider.complete(
             'Connectivity test. Return {"ok": true}.', {}, HealthResult
         )
-        return {"ok": result.ok, "agent": request.agent, "model": model.model}
+        return JSONResponse(
+            content={
+                "ok": result.ok,
+                "agent": request.agent,
+                "model": model.model,
+                "usage": {"chat": usage_record(provider.usage)},
+                "usage_scope": "current_request",
+            }
+        )
     except ApplicationError as exc:
-        raise HTTPException(503, exc.code) from None
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error_code": exc.code,
+                "usage": {"chat": usage_record(provider.usage)},
+                "usage_scope": "current_request",
+            },
+        )

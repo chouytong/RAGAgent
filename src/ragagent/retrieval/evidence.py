@@ -1,8 +1,11 @@
 import re
+from collections import Counter
+from typing import Any
 
 from ragagent.domain.research import (
     CitationValidation,
     Claim,
+    ClaimEvidencePair,
     ClaimVerdict,
     EvidenceRecord,
     EvidenceSufficiencyResult,
@@ -24,7 +27,34 @@ def exact_span(evidence: EvidenceRecord) -> bool:
     return (
         0 <= evidence.span_start < evidence.span_end <= len(evidence.content)
         and evidence.content[evidence.span_start : evidence.span_end] == evidence.quote
+        and all(
+            0 <= source.chunk_start < source.chunk_end <= len(evidence.content)
+            and 0 <= source.span_start < source.span_end
+            and source.span_end - source.span_start == source.chunk_end - source.chunk_start
+            for source in evidence.source_spans
+        )
+        and all(
+            0 <= context.span_start < context.span_end <= len(context.content)
+            and context.content[context.span_start : context.span_end] == context.quote
+            for context in evidence.source_context
+        )
     )
+
+
+def evidence_payload(evidence: EvidenceRecord) -> dict[str, Any]:
+    """Send exact quotes and provenance once; keep raw text local for span validation."""
+    payload = evidence.model_dump(
+        exclude={"content": True, "source_context": {"__all__": {"content"}}}
+    )
+    seen: set[str] = set()
+    auxiliary = []
+    for context in payload["source_context"]:
+        quote = context["quote"]
+        if quote not in evidence.quote and quote not in seen:
+            auxiliary.append(context)
+            seen.add(quote)
+    payload["source_context"] = auxiliary
+    return payload
 
 
 def accepted_evidence(
@@ -69,6 +99,7 @@ async def verify_claims(
         for c in claims
         if INLINE_CITATION.search(c.text)
         or not c.evidence_ids
+        or len(set(c.evidence_ids)) != len(c.evidence_ids)
         or any(eid not in by_id for eid in c.evidence_ids)
     ]
     eligible = [c for c in claims if c.claim_id not in invalid]
@@ -77,20 +108,23 @@ async def verify_claims(
         for cid in invalid
     ]
     model_missing: list[str] = []
+    validated_pairs: list[ClaimEvidencePair] = []
     if eligible:
         cited_ids = {eid for claim in eligible for eid in claim.evidence_ids}
         response = await provider.complete(
             "Verify each claim only against its cited exact quotes. Check numeric values, "
             "comparative statements, scope and contradictions. Reject unsupported inference. "
+            "For supported_pairs, include each claim/evidence pair only when that citation "
+            "supports at least one part of the claim. Different citations may support different "
+            "parts of a comparison. A supported claim does not make every attached citation "
+            "valid: omit irrelevant or unsupported pairs. Return each supported pair once. "
             "Also assess whether the original question and required aspects are fully answered. "
             "Return one verdict per claim; do not assign a confidence probability.",
             {
                 "question": question,
                 "required_aspects": aspects,
                 "claims": [c.model_dump() for c in eligible],
-                "evidence": [
-                    by_id[eid].model_dump(exclude={"content"}) for eid in sorted(cited_ids)
-                ],
+                "evidence": [evidence_payload(by_id[eid]) for eid in sorted(cited_ids)],
             },
             VerificationResponse,
         )
@@ -101,25 +135,50 @@ async def verify_claims(
         for v in response.verdicts:
             grouped.setdefault(v.claim_id, []).append(v)
         unexpected = set(grouped) - {c.claim_id for c in eligible}
+        expected_pairs = {(c.claim_id, eid) for c in eligible for eid in c.evidence_ids}
+        pair_counts = Counter((p.claim_id, p.evidence_id) for p in response.supported_pairs)
+        invalid_pair_set = any(
+            p not in expected_pairs or count != 1 for p, count in pair_counts.items()
+        )
         for c in eligible:
             matched = grouped.get(c.claim_id, [])
-            verdicts.append(
-                matched[0]
-                if len(matched) == 1 and not unexpected
-                else ClaimVerdict(
+            if len(matched) != 1 or unexpected:
+                verdict = ClaimVerdict(
                     claim_id=c.claim_id,
                     supported=False,
                     reason="verifier_unknown_verdict"
                     if unexpected
                     else "verifier_missing_or_duplicate_verdict",
                 )
-            )
+            elif invalid_pair_set:
+                verdict = ClaimVerdict(
+                    claim_id=c.claim_id,
+                    supported=False,
+                    reason="verifier_unknown_or_duplicate_support_pair",
+                )
+            elif matched[0].supported and any(
+                pair_counts[(c.claim_id, eid)] != 1 for eid in c.evidence_ids
+            ):
+                verdict = ClaimVerdict(
+                    claim_id=c.claim_id,
+                    supported=False,
+                    reason="verifier_missing_support_pair",
+                )
+            else:
+                verdict = matched[0]
+            verdicts.append(verdict)
+            if verdict.supported and not verdict.contradiction:
+                validated_pairs.extend(
+                    ClaimEvidencePair(claim_id=c.claim_id, evidence_id=eid)
+                    for eid in c.evidence_ids
+                )
     supported = {v.claim_id for v in verdicts if v.supported and not v.contradiction}
     covered = {c.aspect for c in claims if c.claim_id in supported}
     missing = list(dict.fromkeys([a for a in aspects if a not in covered] + model_missing))
     return CitationValidation(
         valid=bool(claims) and len(supported) == len(claims) and not missing,
         verdicts=verdicts,
+        supported_pairs=validated_pairs,
         missing_citations=invalid,
         missing_aspects=missing,
     )

@@ -9,11 +9,29 @@ from sqlalchemy.orm import Session
 from ragagent.db.dispatch import JobDispatch
 from ragagent.db.models import ExecutionEvent, Paper, Run
 from ragagent.errors import ApplicationError
+from ragagent.settings import get_settings
 
 TERMINAL_STATUSES = {"completed", "insufficient_evidence", "failed"}
 JOB_TIMEOUT_SECONDS = 1800
 RUNNING_GRACE_SECONDS = 120
 QUEUED_TIMEOUT_SECONDS = 1800
+
+
+def job_timeout_seconds(run: Run) -> int:
+    frozen = run.request.get("_job_timeout_seconds")
+    if isinstance(frozen, int) and not isinstance(frozen, bool) and 1 <= frozen <= 86400:
+        return frozen
+    return (
+        get_settings().evaluation_timeout_seconds
+        if run.kind.startswith("eval_")
+        else JOB_TIMEOUT_SECONDS
+    )
+
+
+def freeze_job_timeout(run: Run) -> int:
+    timeout = job_timeout_seconds(run)
+    run.request = {**run.request, "_job_timeout_seconds": timeout}
+    return timeout
 
 
 class DispatchQueue(Protocol):
@@ -48,8 +66,13 @@ def dispatch_run(session: Session, queue: DispatchQueue, run_id: str) -> bool:
         session.rollback()
         return False
     dispatch.attempts += 1
+    timeout = freeze_job_timeout(run)
     try:
-        queue.submit(run_id)
+        timed_submit = getattr(queue, "submit_with_timeout", None)
+        if timed_submit is not None:
+            timed_submit(run_id, timeout)
+        else:
+            queue.submit(run_id)
     except Exception:
         # The durable intent is retained, including if Redis accepted the send but
         # its response was lost. The next attempt uses RQ's atomic uniqueness check.
@@ -75,6 +98,7 @@ def claim_run(session: Session, run_id: str) -> Run | None:
     dispatch.claimed_at = datetime.now(UTC)
     dispatch.dispatched_at = dispatch.dispatched_at or dispatch.claimed_at
     dispatch.last_error_code = None
+    freeze_job_timeout(run)
     run.status, run.error_code = "running", None
     session.add(
         ExecutionEvent(
@@ -154,7 +178,7 @@ def reconcile_jobs(
             session.flush()
         started_at = dispatch.claimed_at or run.created_at
         if run.status == "running" and now - started_at > timedelta(
-            seconds=JOB_TIMEOUT_SECONDS + RUNNING_GRACE_SECONDS
+            seconds=job_timeout_seconds(run) + RUNNING_GRACE_SECONDS
         ):
             fail_run(session, run.id, "worker_interrupted")
             continue

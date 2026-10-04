@@ -56,6 +56,18 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
                 ),
                 {"sha": "a" * 64},
             )
+            for source_id, arxiv_id, checksum in [
+                ("legacy-unversioned", "2408.09869", "b" * 64),
+                ("legacy-pinned", "2408.12345v2", "c" * 64),
+            ]:
+                connection.execute(
+                    text(
+                        "INSERT INTO papers "
+                        "(id,title,arxiv_id,sha256,status,original_path,created_at) "
+                        "VALUES (:id,'Legacy arXiv',:arxiv_id,:sha,'indexed','/source.pdf',now())"
+                    ),
+                    {"id": source_id, "arxiv_id": arxiv_id, "sha": checksum},
+                )
             connection.execute(
                 text(
                     "INSERT INTO sections (id,paper_id,parent_id,title,path,ordinal) VALUES "
@@ -86,6 +98,32 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
         alembic("check")
         with probe.begin() as connection:
             assert connection.execute(
+                text(
+                    "SELECT arxiv_family_id,arxiv_version,source_status "
+                    "FROM papers WHERE id='legacy-unversioned'"
+                )
+            ).one() == ("2408.09869", None, "unknown")
+            assert connection.execute(
+                text(
+                    "SELECT arxiv_family_id,arxiv_version,source_status "
+                    "FROM papers WHERE id='legacy-pinned'"
+                )
+            ).one() == ("2408.12345", 2, "unknown")
+            # Separate source identities may share byte-identical PDFs.
+            connection.execute(
+                text("UPDATE papers SET sha256=:sha WHERE id='legacy-pinned'"),
+                {"sha": "b" * 64},
+            )
+        failure = alembic("downgrade", "0002", succeeds=False)
+        assert "source_identity_downgrade_requires_unique_checksums" in failure
+        with probe.begin() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+            connection.execute(
+                text("UPDATE papers SET sha256=:sha WHERE id='legacy-pinned'"),
+                {"sha": "c" * 64},
+            )
+        with probe.begin() as connection:
+            assert connection.execute(
                 text("SELECT identity,parent_id FROM sections WHERE id='legacy-child'")
             ).one() == ("legacy:legacy-child", "legacy-parent")
             assert (
@@ -109,7 +147,7 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
         failure = alembic("downgrade", "0001", succeeds=False)
         assert "section_identity_downgrade_requires_unique_display_paths" in failure
         with probe.begin() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
             assert connection.scalar(text("SELECT count(*) FROM job_dispatches")) == 2
             assert connection.scalar(text("SELECT count(*) FROM sections")) == 3
             connection.execute(text("DELETE FROM sections WHERE id='new-occurrence'"))

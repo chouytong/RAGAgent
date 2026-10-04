@@ -8,22 +8,30 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ragagent.domain.research import Claim, EvidenceRecord
+from ragagent.errors import ApplicationError
 from ragagent.evaluation.artifacts import (
     canonical_hash,
+    checkpoint_usage,
     corpus_snapshot,
+    evaluation_status,
     manifest,
+    previous_attempts,
     provider_snapshot,
+    resume_results,
     retrieval_snapshot,
+    usage_delta,
+    usage_snapshot,
     verify_corpus_snapshot,
+    workflow_usage,
     write_results,
 )
 from ragagent.evaluation.metrics import average, ratio
-from ragagent.evaluation.schema import EvaluationDataset, RAGJudgment
+from ragagent.evaluation.schema import EvaluationCase, EvaluationDataset, RAGJudgment
 from ragagent.graphs.rag import build_rag
 from ragagent.graphs.research import build_research
 from ragagent.graphs.state import MultiAgentState, RAGState
 from ragagent.providers.chat import ChatProvider
-from ragagent.retrieval.evidence import exact_span
+from ragagent.retrieval.evidence import evidence_payload, exact_span
 from ragagent.retrieval.service import SearchPort
 from ragagent.settings import Settings
 
@@ -69,7 +77,7 @@ async def judge_metrics(
         "expected_refusal": expected_refusal,
         "claims": [c.model_dump() for c in claims],
         "evidence": [
-            e.model_dump(exclude={"content", "scores"})
+            {key: value for key, value in evidence_payload(e).items() if key != "scores"}
             for eid, e in by_id.items()
             if eid in cited_ids
         ],
@@ -106,39 +114,111 @@ async def judge_metrics(
     return JudgedOutput(metrics, result, payload)
 
 
-def usage_snapshot(provider: ChatProvider) -> dict[str, Any]:
-    usage = provider.usage
-    return {
-        "prompt_tokens": usage.prompt_tokens,
-        "completion_tokens": usage.completion_tokens,
-        "cost": usage.cost,
-        "known_cost": getattr(usage, "known_cost", 0.0),
-        "unknown_cost_calls": getattr(usage, "unknown_cost_calls", 0),
-        "calls": getattr(usage, "calls", 0),
-        "accounting_available": hasattr(usage, "unknown_cost_calls"),
-    }
-
-
-def usage_delta(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
-    result = {
-        key: current[key] - previous[key]
-        for key in (
-            "prompt_tokens",
-            "completion_tokens",
-            "known_cost",
-            "unknown_cost_calls",
-            "calls",
+async def _generation_case(
+    case: EvaluationCase,
+    search: SearchPort,
+    agents: Mapping[str, ChatProvider],
+    judge: ChatProvider,
+    settings: Settings,
+    multi_agent: bool,
+    row: dict[str, Any],
+) -> None:
+    start = time.perf_counter()
+    if multi_agent:
+        graph = build_research(
+            search,
+            agents["supervisor"],
+            agents["retriever"],
+            agents["analyst"],
+            agents["reviewer"],
+            settings.max_retrieval_retries + 1,
+            settings.max_revisions,
+            settings.max_iterations,
+            min_rerank_score=settings.minimum_rerank_score,
+            max_evidence_records=settings.research_evidence_budget,
         )
-    }
-    if current["accounting_available"]:
-        result["cost"] = None if result["unknown_cost_calls"] else result["known_cost"]
+        research = MultiAgentState.model_validate(
+            await graph.ainvoke(
+                MultiAgentState(research_question=case.query, filters=case.filters),
+                {"recursion_limit": 300},
+            )
+        )
+        claims = (
+            [c for analysis in research.analysis_results for c in analysis.factual_claims()]
+            if research.status == "completed"
+            else []
+        )
+        evidence, status, actual_output = (
+            research.evidence_pool,
+            research.status,
+            research.draft_report,
+        )
+        retries = max(0, research.retrieval_count - 1) + research.revision_count
     else:
-        result["cost"] = (
-            current["cost"] - previous["cost"]
-            if current["cost"] is not None and previous["cost"] is not None
-            else None
+        rag_graph = build_rag(
+            search,
+            agents["supervisor"],
+            agents["retriever"],
+            agents["analyst"],
+            agents["reviewer"],
+            settings.max_retrieval_retries,
+            settings.minimum_rerank_score,
+            max_evidence_records=settings.rag_evidence_budget,
         )
-    return result
+        state = RAGState.model_validate(
+            await rag_graph.ainvoke(
+                RAGState(query=case.query, filters=case.filters), {"recursion_limit": 100}
+            )
+        )
+        claims, evidence, status = state.claims, state.reranked_evidence, state.status
+        actual_output, retries = state.answer, max(0, state.retrieval_attempt - 1)
+    row.update(
+        {
+            "status": status,
+            "claims": [claim.model_dump() for claim in claims],
+            "actual_output": actual_output,
+            "evidence": [item.model_dump(mode="json") for item in evidence],
+            "evidence_snapshot_hash": canonical_hash(
+                [item.model_dump(mode="json") for item in evidence]
+            ),
+            "workflow_latency_ms": (time.perf_counter() - start) * 1000,
+        }
+    )
+    judge_start = time.perf_counter()
+    row["failure_stage"] = "judge"
+    judged = await judge_metrics(
+        claims,
+        evidence,
+        case.expected_answer,
+        case.required_aspects,
+        set(case.relevant_chunk_ids),
+        judge,
+        actual_output=actual_output,
+        workflow_status=status,
+        expected_refusal=case.expected_refusal,
+        question=case.query,
+    )
+    metrics = judged.metrics
+    metrics["latency_ms"] = row["workflow_latency_ms"]
+    metrics["judge_latency_ms"] = (time.perf_counter() - judge_start) * 1000
+    if multi_agent:
+        metrics.update(
+            {
+                "task_completion": float(status == "completed"),
+                "citation_correctness": metrics["citation_precision"],
+                "report_completeness": metrics["answer_completeness"],
+                "retry_count": float(retries),
+            }
+        )
+    row.update(
+        {
+            "metrics": metrics,
+            "judge_input": judged.payload,
+            "judgment": judged.judgment.model_dump(mode="json"),
+            "evaluation_status": "completed",
+        }
+    )
+    row.pop("failure_stage", None)
 
 
 async def evaluate_generation(
@@ -149,6 +229,9 @@ async def evaluate_generation(
     settings: Settings,
     directory: Path,
     multi_agent: bool = False,
+    *,
+    resume_directory: Path | None = None,
+    resume_usage: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     dataset = dataset.model_copy(deep=True)
     settings = settings.model_copy(deep=True)
@@ -170,128 +253,101 @@ async def evaluate_generation(
         "prompt": JUDGE_PROMPT,
         "prompt_hash": hashlib.sha256(JUDGE_PROMPT.encode()).hexdigest(),
     }
-    providers = {**agents, "judge": judge}
-    initial_usage = {name: usage_snapshot(p) for name, p in providers.items()}
-    rows: list[dict[str, Any]] = []
-    for case in dataset.cases:
-        before_usage = {name: usage_snapshot(p) for name, p in providers.items()}
-        start = time.perf_counter()
-        if multi_agent:
-            graph = build_research(
-                search,
-                agents["supervisor"],
-                agents["retriever"],
-                agents["analyst"],
-                agents["reviewer"],
-                settings.max_retrieval_retries + 1,
-                settings.max_revisions,
-                settings.max_iterations,
-                min_rerank_score=settings.minimum_rerank_score,
-                max_evidence_records=settings.research_evidence_budget,
-            )
-            research = MultiAgentState.model_validate(
-                await graph.ainvoke(
-                    MultiAgentState(research_question=case.query, filters=case.filters),
-                    {"recursion_limit": 300},
-                )
-            )
-            claims = (
-                [c for a in research.analysis_results for c in a.factual_claims()]
-                if research.status == "completed"
-                else []
-            )
-            evidence = research.evidence_pool
-            status = research.status
-            actual_output = research.draft_report
-            retries = max(0, research.retrieval_count - 1) + research.revision_count
-        else:
-            rag = build_rag(
-                search,
-                agents["supervisor"],
-                agents["retriever"],
-                agents["analyst"],
-                agents["reviewer"],
-                settings.max_retrieval_retries,
-                settings.minimum_rerank_score,
-                max_evidence_records=settings.rag_evidence_budget,
-            )
-            state = RAGState.model_validate(
-                await rag.ainvoke(
-                    RAGState(query=case.query, filters=case.filters), {"recursion_limit": 100}
-                )
-            )
-            claims, evidence, status = state.claims, state.reranked_evidence, state.status
-            actual_output = state.answer
-            retries = max(0, state.retrieval_attempt - 1)
-        workflow_latency = (time.perf_counter() - start) * 1000
-        judge_start = time.perf_counter()
-        judged = await judge_metrics(
-            claims,
-            evidence,
-            case.expected_answer,
-            case.required_aspects,
-            set(case.relevant_chunk_ids),
-            judge,
-            actual_output=actual_output,
-            workflow_status=status,
-            expected_refusal=case.expected_refusal,
-            question=case.query,
-        )
-        metrics = judged.metrics
-        metrics["latency_ms"] = workflow_latency
-        metrics["judge_latency_ms"] = (time.perf_counter() - judge_start) * 1000
-        if multi_agent:
-            metrics.update(
-                {
-                    "task_completion": float(status == "completed"),
-                    "citation_correctness": metrics["citation_precision"],
-                    "report_completeness": metrics["answer_completeness"],
-                    "retry_count": float(retries),
-                }
-            )
-        rows.append(
-            {
-                "id": case.id,
-                "status": status,
-                "metrics": metrics,
-                "claims": [c.model_dump() for c in claims],
-                "actual_output": actual_output,
-                "evidence": [e.model_dump(mode="json") for e in evidence],
-                "evidence_snapshot_hash": canonical_hash(
-                    [e.model_dump(mode="json") for e in evidence]
-                ),
-                "gold_labels": case.model_dump(mode="json"),
-                "judge_input": judged.payload,
-                "judgment": judged.judgment.model_dump(mode="json"),
-                "usage": {
-                    name: usage_delta(before_usage[name], usage_snapshot(p))
-                    for name, p in providers.items()
-                },
-            }
-        )
-    verify_corpus_snapshot(session, corpus)
-    provenance["evidence_snapshot_hash"] = canonical_hash([row["evidence"] for row in rows])
-    usage = {
-        name: usage_delta(initial_usage[name], usage_snapshot(p)) for name, p in providers.items()
-    }
-    report = {
-        "kind": "multi_agent" if multi_agent else "rag",
+    kind = "multi_agent" if multi_agent else "rag"
+    previous = resume_results(resume_directory, kind, provenance)
+    embedding = getattr(getattr(search, "dense", None), "embedder", None)
+    providers = {**agents, "judge": judge, "embedding": embedding}
+    initial_usage = {name: usage_snapshot(provider) for name, provider in providers.items()}
+    rows = (
+        [
+            {**row, "attempt_scope": "resumed", "resumed_from": resume_directory.name}
+            for row in previous.get("per_query", [])
+            if row.get("evaluation_status") == "completed"
+        ]
+        if previous and resume_directory
+        else []
+    )
+    retained_ids = {row["id"] for row in rows}
+    report: dict[str, Any] = {
+        "kind": kind,
         "manifest": provenance,
         "per_query": rows,
-        "summary": average(row["metrics"] for row in rows),
-        "usage": usage,
-        "total_workflow_tokens": sum(
-            usage[name]["prompt_tokens"] + usage[name]["completion_tokens"] for name in agents
-        ),
-        "total_workflow_cost": sum(
-            usage[name]["cost"] for name in agents if usage[name]["cost"] is not None
-        )
-        if all(usage[name]["cost"] is not None for name in agents)
-        else None,
-        "known_workflow_cost": sum(usage[name]["known_cost"] for name in agents),
-        "unknown_workflow_cost_calls": sum(usage[name]["unknown_cost_calls"] for name in agents),
-        "total_workflow_latency_ms": sum(row["metrics"]["latency_ms"] for row in rows),
-        "completed_cases": sum(row["status"] == "completed" for row in rows),
+        "usage_scope": "current_attempt",
+        "previous_attempt_usage": previous_attempts(previous, resume_usage),
+        "corpus_verification": "pending",
     }
-    write_results(directory, report)
-    return report
+
+    def checkpoint() -> None:
+        successful = [row for row in rows if row["evaluation_status"] == "completed"]
+        failed = len(rows) - len(successful)
+        pending = len(dataset.cases) - len(rows)
+        usage = {
+            name: usage_delta(initial_usage[name], usage_snapshot(provider))
+            for name, provider in providers.items()
+        }
+        provenance["evidence_snapshot_hash"] = canonical_hash(
+            [row.get("evidence", []) for row in rows]
+        )
+        report.update(
+            {
+                "status": evaluation_status(len(successful), failed, pending),
+                "summary": average(row["metrics"] for row in successful),
+                "summary_case_count": len(successful),
+                "failed_cases": failed,
+                "pending_cases": pending,
+                "evaluated_cases": len(successful),
+                "completed_cases": sum(row["status"] == "completed" for row in successful),
+                "usage": usage,
+                **workflow_usage(usage),
+                "total_workflow_latency_ms": sum(
+                    row.get("workflow_latency_ms", 0.0)
+                    for row in rows
+                    if row["attempt_scope"] == "current"
+                ),
+            }
+        )
+        if report["corpus_verification"] == "failed":
+            report["status"] = "failed"
+        elif report["corpus_verification"] == "pending" and report["status"] == "completed":
+            report["status"] = "running"
+        write_results(directory, report)
+
+    with checkpoint_usage(providers, checkpoint):
+        checkpoint()
+        for case in dataset.cases:
+            if case.id in retained_ids:
+                continue
+            before_usage = {name: usage_snapshot(provider) for name, provider in providers.items()}
+            start = time.perf_counter()
+            row: dict[str, Any] = {
+                "id": case.id,
+                "status": "failed",
+                "evaluation_status": "failed",
+                "attempt_scope": "current",
+                "failure_stage": "workflow",
+                "gold_labels": case.model_dump(mode="json"),
+                "metrics": {},
+                "evidence": [],
+            }
+            try:
+                await _generation_case(case, search, agents, judge, settings, multi_agent, row)
+            except Exception as exc:
+                row["error_code"] = (
+                    exc.code if isinstance(exc, ApplicationError) else "evaluation_case_failed"
+                )
+                row.setdefault("workflow_latency_ms", (time.perf_counter() - start) * 1000)
+                if session is not None:
+                    session.rollback()
+            row["usage"] = {
+                name: usage_delta(before_usage[name], usage_snapshot(provider))
+                for name, provider in providers.items()
+            }
+            rows.append(row)
+            checkpoint()
+        try:
+            verify_corpus_snapshot(session, corpus)
+            report["corpus_verification"] = "verified" if session is not None else "unavailable"
+        except ApplicationError as exc:
+            report["corpus_verification"], report["error_code"] = "failed", exc.code
+        checkpoint()
+        return report

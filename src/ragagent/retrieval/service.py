@@ -5,6 +5,7 @@ from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
 from ragagent.db.models import Author, Chunk, Evidence, Paper, PaperAuthor
+from ragagent.domain.documents import SourceContext, SourceSpan
 from ragagent.domain.research import (
     Candidate,
     EvidenceRecord,
@@ -30,6 +31,9 @@ def record(chunk: Chunk, paper: Paper, score: float, source: str, authors: list[
             year=paper.year,
             venue=paper.venue,
             arxiv_id=paper.arxiv_id,
+            arxiv_family_id=paper.arxiv_family_id,
+            arxiv_version=paper.arxiv_version,
+            source_status=paper.source_status or "unknown",
         ),
         chunk_id=chunk.id,
         section_id=chunk.section_id,
@@ -41,6 +45,14 @@ def record(chunk: Chunk, paper: Paper, score: float, source: str, authors: list[
         span_start=0,
         span_end=len(chunk.content),
         scores={source: score},
+        source_context=[
+            SourceContext.model_validate(context)
+            for context in (chunk.metadata_json or {}).get("source_context", [])
+        ],
+        source_spans=[
+            SourceSpan.model_validate(span)
+            for span in (chunk.metadata_json or {}).get("source_spans", [])
+        ],
     )
     return Candidate(evidence=evidence, score=score)
 
@@ -82,17 +94,29 @@ class DenseRetriever:
         probe = (
             select(Chunk, Paper, literal(0.0))
             .join(Paper)
-            .where(Paper.status == "indexed", Paper.embedding_model == self.embedder.fingerprint)
+            .where(
+                Paper.status == "indexed", Paper.source_status.not_in(["withdrawn", "retracted"])
+            )
         )
         probe = apply_filters(probe, filters)
         if self.session.scalar(probe.with_only_columns(Chunk.id).limit(1)) is None:
+            return []
+        # A default local model may resolve immutable HF metadata for its identity.
+        # Do not do that, or load model weights, for an empty filtered corpus.
+        fingerprint = self.embedder.fingerprint
+        compatible = probe.where(Paper.embedding_model == fingerprint)
+        if self.session.scalar(compatible.with_only_columns(Chunk.id).limit(1)) is None:
             return []
         vector = (await self.embedder.embed([query]))[0]
         distance = Chunk.embedding.cosine_distance(vector)
         statement = (
             select(Chunk, Paper, (1 - distance).label("score"))
             .join(Paper)
-            .where(Paper.status == "indexed", Paper.embedding_model == self.embedder.fingerprint)
+            .where(
+                Paper.status == "indexed",
+                Paper.embedding_model == fingerprint,
+                Paper.source_status.not_in(["withdrawn", "retracted"]),
+            )
         )
         statement = apply_filters(statement, filters).order_by(distance, Chunk.id).limit(top_n)
         rows = [(c, p, float(s)) for c, p, s in self.session.execute(statement)]
@@ -115,7 +139,11 @@ class LexicalRetriever:
         statement = (
             select(Chunk, Paper, score)
             .join(Paper)
-            .where(Paper.status == "indexed", Chunk.search_vector.op("@@")(tsquery))
+            .where(
+                Paper.status == "indexed",
+                Paper.source_status.not_in(["withdrawn", "retracted"]),
+                Chunk.search_vector.op("@@")(tsquery),
+            )
         )
         statement = apply_filters(statement, filters).order_by(score.desc(), Chunk.id).limit(top_n)
         rows = [(c, p, float(s)) for c, p, s in self.session.execute(statement)]
@@ -156,7 +184,9 @@ class HybridRetriever:
         lexical = self.fusion.fuse(lexical_lists, self.top_n)
         fused = self.fusion.fuse(dense_lists + lexical_lists, self.top_n)
         ranked = (
-            await self.reranker.rerank(plan.queries[0], fused, self.top_k)
+            await self.reranker.rerank(
+                plan.rerank_query or "\n".join(plan.queries), fused, self.top_k
+            )
             if rerank
             else fused[: self.top_k]
         )

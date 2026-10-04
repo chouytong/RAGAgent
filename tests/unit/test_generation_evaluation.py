@@ -347,3 +347,130 @@ async def test_manifest_uses_actual_instantiated_models_despite_config_edit(tmp_
         "rag_evidence_budget": 16,
         "research_evidence_budget": 32,
     }
+
+
+def refusal_dataset() -> EvaluationDataset:
+    return EvaluationDataset(
+        dataset_id="partial-refusals",
+        label_source="synthetic",
+        description="NOT A BENCHMARK",
+        cases=[
+            EvaluationCase(
+                id=f"q{i}",
+                query=f"Unknown method {i}?",
+                question_type="fact",
+                expected_answer="Insufficient evidence in the indexed literature.",
+                expected_refusal=True,
+            )
+            for i in (1, 2)
+        ],
+    )
+
+
+def refusal_judgment() -> RAGJudgment:
+    return RAGJudgment(
+        supported_pairs=[], supported_claim_ids=[], answered_aspects=[], refusal_supported=True
+    )
+
+
+def refusal_agents(count: int) -> dict[str, MockProvider]:
+    return {
+        "supervisor": MockProvider(
+            [QueryPlan(queries=["q"], required_aspects=["method"]) for _ in range(count)]
+        ),
+        "retriever": MockProvider([]),
+        "analyst": MockProvider([]),
+        "reviewer": MockProvider([]),
+    }
+
+
+async def test_partial_generation_checkpoints_failures_and_resumes_only_unfinished_cases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ragagent.evaluation import generation
+
+    # This scripted corpus identity stands in for the PostgreSQL-backed resume guard.
+    monkeypatch.setattr(
+        generation,
+        "corpus_snapshot",
+        lambda session: {"availability": "available", "hash": "fixed-test-corpus"},
+    )
+    monkeypatch.setattr(generation, "verify_corpus_snapshot", lambda session, initial: None)
+    dataset = refusal_dataset()
+    source = tmp_path / "source"
+    judge = MockProvider([refusal_judgment(), {"invalid": "never log raw provider errors"}])
+    first = await evaluate_generation(
+        dataset,
+        Search(empty_rounds=99),
+        refusal_agents(2),
+        judge,
+        Settings(max_retrieval_retries=0),
+        source,
+    )
+    assert first["status"] == "partial"
+    assert first["failed_cases"] == first["summary_case_count"] == 1
+    assert first["pending_cases"] == 0
+    assert first["summary"]["refusal_correctness"] == 1.0
+    assert first["per_query"][1]["failure_stage"] == "judge"
+    assert first["per_query"][1]["error_code"] == "evaluation_case_failed"
+    assert first["per_query"][1]["usage"]["judge"]["calls"] == 1
+    assert json.loads((source / "results.json").read_text())["status"] == "partial"
+    assert "never log raw provider errors" not in (source / "results.json").read_text()
+
+    resumed_agents = refusal_agents(1)
+    resumed_judge = MockProvider([refusal_judgment()])
+    second = await evaluate_generation(
+        dataset,
+        Search(empty_rounds=99),
+        resumed_agents,
+        resumed_judge,
+        Settings(max_retrieval_retries=0),
+        tmp_path / "resumed",
+        resume_directory=source,
+    )
+    assert second["status"] == "completed"
+    assert second["failed_cases"] == 0 and second["summary_case_count"] == 2
+    assert len(resumed_agents["supervisor"].calls) == len(resumed_judge.calls) == 1
+    assert second["per_query"][0]["attempt_scope"] == "resumed"
+    assert second["usage_scope"] == "current_attempt"
+    assert second["usage"]["judge"]["calls"] == 1
+    assert second["previous_attempt_usage"][0]["usage"]["judge"]["calls"] == 2
+    assert second["manifest"]["resume_from"]["run_id"] == "source"
+
+    changed = dataset.model_copy(deep=True)
+    changed.cases[0].query = "Changed question?"
+    with pytest.raises(ValueError, match="resume_identity_mismatch"):
+        await evaluate_generation(
+            changed,
+            Search(empty_rounds=99),
+            refusal_agents(0),
+            MockProvider([]),
+            Settings(max_retrieval_retries=0),
+            tmp_path / "invalid",
+            resume_directory=source,
+        )
+
+
+async def test_generation_persists_first_result_before_later_case_is_interrupted(
+    tmp_path: Path,
+) -> None:
+    class InterruptingJudge(MockProvider):
+        async def complete(self, instruction: str, payload: dict[str, Any], schema: type[T]) -> T:
+            if len(self.calls) == 1:
+                saved = json.loads((tmp_path / "results.json").read_text())
+                assert saved["status"] == "running"
+                assert saved["pending_cases"] == 1 and saved["summary_case_count"] == 1
+                raise KeyboardInterrupt()
+            return await super().complete(instruction, payload, schema)
+
+    with pytest.raises(KeyboardInterrupt):
+        await evaluate_generation(
+            refusal_dataset(),
+            Search(empty_rounds=99),
+            refusal_agents(2),
+            InterruptingJudge([refusal_judgment()]),
+            Settings(max_retrieval_retries=0),
+            tmp_path,
+        )
+    assert json.loads((tmp_path / "results.json").read_text())["per_query"][0]["id"] == "q1"

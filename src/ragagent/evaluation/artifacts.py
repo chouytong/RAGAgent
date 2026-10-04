@@ -3,6 +3,8 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -13,7 +15,7 @@ from sqlalchemy.orm import Session
 from ragagent.db.models import Author, Chunk, ChunkEntity, Entity, Paper, PaperAuthor, Section
 from ragagent.errors import EvaluationError
 from ragagent.evaluation.schema import EvaluationDataset
-from ragagent.providers.chat import ChatProvider
+from ragagent.providers.chat import ChatProvider, Usage, usage_record
 from ragagent.providers.config import AgentModel
 from ragagent.providers.embedding import normalize_endpoint
 from ragagent.settings import Settings
@@ -99,6 +101,164 @@ def canonical_hash(value: Any) -> str:
     return hashlib.sha256(serialized.encode()).hexdigest()
 
 
+def usage_snapshot(provider: Any) -> dict[str, Any]:
+    usage = getattr(provider, "usage", None)
+    if isinstance(usage, Usage):
+        return {**usage_record(usage), "accounting_available": True}
+    return {
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+        "completion_tokens": getattr(usage, "completion_tokens", 0),
+        "cost": getattr(usage, "cost", None),
+        "known_cost": getattr(usage, "known_cost", 0.0),
+        "unknown_cost_calls": getattr(usage, "unknown_cost_calls", 0),
+        "calls": getattr(usage, "calls", 0),
+        "in_flight_calls": getattr(usage, "in_flight_calls", 0),
+        "accounting_available": hasattr(usage, "unknown_cost_calls"),
+        "provider_models": list(getattr(usage, "provider_models", [])),
+        "system_fingerprints": list(getattr(usage, "system_fingerprints", [])),
+    }
+
+
+def usage_delta(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    result = {
+        key: current[key] - previous[key]
+        for key in (
+            "prompt_tokens",
+            "completion_tokens",
+            "known_cost",
+            "unknown_cost_calls",
+            "calls",
+            "in_flight_calls",
+        )
+    }
+    result["accounting_available"] = current["accounting_available"]
+    for key in ("provider_models", "system_fingerprints"):
+        result[key] = list(dict.fromkeys([*previous.get(key, []), *current.get(key, [])]))
+    if current["accounting_available"]:
+        result["cost"] = (
+            None
+            if result["unknown_cost_calls"] or result["in_flight_calls"]
+            else result["known_cost"]
+        )
+    else:
+        result["cost"] = (
+            current["cost"] - previous["cost"]
+            if current["cost"] is not None and previous["cost"] is not None
+            else None
+        )
+    return result
+
+
+@contextmanager
+def checkpoint_usage(
+    providers: Mapping[str, Any], checkpoint: Callable[[], None]
+) -> Iterator[None]:
+    """Checkpoint before dispatch and after accounting, preserving the worker observer."""
+    observers: dict[int, tuple[Usage, Callable[[Usage], None] | None]] = {}
+    try:
+        for provider in providers.values():
+            usage = getattr(provider, "usage", None)
+            if not isinstance(usage, Usage) or id(usage) in observers:
+                continue
+            previous = usage.on_update
+            observers[id(usage)] = (usage, previous)
+
+            def observe(
+                updated: Usage, original: Callable[[Usage], None] | None = previous
+            ) -> None:
+                try:
+                    if original is not None:
+                        original(updated)
+                finally:
+                    checkpoint()
+
+            usage.on_update = observe
+        yield
+    finally:
+        for usage, original in observers.values():
+            usage.on_update = original
+
+
+def workflow_usage(usage: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Sum chat and retrieval embedding costs, excluding the separate judge."""
+    workflow = [value for name, value in usage.items() if name != "judge"]
+    return {
+        "total_workflow_tokens": sum(
+            value["prompt_tokens"] + value["completion_tokens"] for value in workflow
+        ),
+        "total_workflow_cost": sum(value["cost"] for value in workflow)
+        if all(value["cost"] is not None for value in workflow)
+        else None,
+        "known_workflow_cost": sum(value["known_cost"] for value in workflow),
+        "unknown_workflow_cost_calls": sum(value["unknown_cost_calls"] for value in workflow),
+        "workflow_accounting_available": all(value["accounting_available"] for value in workflow),
+    }
+
+
+def resume_results(
+    directory: Path | None, kind: str, provenance: dict[str, Any]
+) -> dict[str, Any] | None:
+    if directory is None:
+        return None
+    try:
+        previous = json.loads((directory / "results.json").read_text())
+    except (OSError, ValueError):
+        raise EvaluationError("evaluation_resume_artifact_unavailable") from None
+    if not isinstance(previous, dict) or previous.get("kind") != kind:
+        raise EvaluationError("evaluation_resume_kind_mismatch")
+    prior = previous.get("manifest", {})
+    identity = (
+        "dataset_hash",
+        "source_hash",
+        "model_configuration",
+        "workflow_configuration",
+        "retrieval_configuration",
+        "corpus_snapshot",
+        "judge",
+    )
+    if (
+        previous.get("corpus_verification") == "failed"
+        or provenance["corpus_snapshot"].get("availability") != "available"
+        or any(prior.get(key) != provenance.get(key) for key in identity)
+    ):
+        raise EvaluationError("evaluation_resume_identity_mismatch")
+    provenance["resume_from"] = {
+        "run_id": directory.name,
+        "manifest_hash": canonical_hash(prior),
+    }
+    return previous
+
+
+def previous_attempts(
+    previous: dict[str, Any] | None,
+    persisted_usage: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    if previous is None:
+        return []
+    usage = {name: dict(value) for name, value in previous.get("usage", {}).items()}
+    if persisted_usage is not None:
+        for name, snapshot in persisted_usage.items():
+            usage[name] = {**usage.get(name, {}), **snapshot}
+            usage[name].setdefault("accounting_available", "unknown_cost_calls" in snapshot)
+    return [
+        *previous.get("previous_attempt_usage", []),
+        {
+            "timestamp": previous["manifest"]["timestamp"],
+            "usage": usage,
+            "usage_source": "persisted_run" if persisted_usage is not None else "artifact",
+            "status": previous.get("status", "unknown"),
+        },
+    ]
+
+
+def evaluation_status(successful: int, failed: int, pending: int) -> str:
+    if pending:
+        return "running"
+    if failed:
+        return "partial" if successful else "failed"
+    return "completed"
+
+
 def provider_snapshot(provider: ChatProvider) -> dict[str, Any]:
     """Record the instantiated adapter, never a configuration file reread after execution."""
     model = getattr(provider, "model", None)
@@ -145,6 +305,9 @@ def corpus_snapshot(session: Session | None) -> dict[str, Any]:
             Paper.year,
             Paper.venue,
             Paper.arxiv_id,
+            Paper.arxiv_family_id,
+            Paper.arxiv_version,
+            Paper.source_status,
             Paper.source_url,
             Paper.sha256,
             Paper.embedding_model,
@@ -217,7 +380,7 @@ def corpus_snapshot(session: Session | None) -> dict[str, Any]:
         "availability": "available",
         "hash": digest.hexdigest(),
         "algorithm": "sha256",
-        "scope": "indexed_papers_authors_sections_chunks_vectors_entities_v1",
+        "scope": "indexed_papers_authors_sections_chunks_vectors_entities_v2",
         "counts": counts,
     }
 
@@ -273,9 +436,9 @@ def manifest(
 
 def write_results(directory: Path, result: dict[str, Any]) -> None:
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "results.json").write_text(
-        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    temporary = directory / "results.json.tmp"
+    temporary.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    temporary.replace(directory / "results.json")
     corpus_hash = result["manifest"].get("corpus_snapshot", {}).get("hash", "unavailable")
     lines = [
         "# Evaluation results",
@@ -288,6 +451,12 @@ def write_results(directory: Path, result: dict[str, Any]) -> None:
         f"Corpus hash: `{corpus_hash}`",
         "",
         "Metrics are calculated from this run. Null means unavailable/undefined.",
+        f"Evaluation status: {result.get('status', 'unknown')}",
+        f"Failed cases: {result.get('failed_cases', 0)}; "
+        f"pending cases: {result.get('pending_cases', 0)}.",
+        "Summary includes successfully evaluated cases only; see summary_case_count.",
+        "Usage and total costs cover the current attempt, including failures. "
+        "Previous attempt costs are retained separately in previous_attempt_usage.",
         "",
         "```json",
         json.dumps(result.get("summary", {}), indent=2),
@@ -295,4 +464,6 @@ def write_results(directory: Path, result: dict[str, Any]) -> None:
         "",
         "See results.json for per-query rankings, latency, models and provenance.",
     ]
-    (directory / "results.md").write_text("\n".join(lines), encoding="utf-8")
+    temporary = directory / "results.md.tmp"
+    temporary.write_text("\n".join(lines), encoding="utf-8")
+    temporary.replace(directory / "results.md")

@@ -7,6 +7,7 @@ from ragagent.domain.research import (
     AnswerDraft,
     CitationValidation,
     Claim,
+    ClaimEvidencePair,
     ClaimVerdict,
     EvidenceRecord,
     MetadataFilter,
@@ -60,6 +61,9 @@ def claims() -> list[Claim]:
 
 def verdict(supported: bool = True) -> VerificationResponse:
     return VerificationResponse(
+        supported_pairs=[ClaimEvidencePair(claim_id="c", evidence_id=evidence().evidence_id)]
+        if supported
+        else [],
         question_answered=True,
         verdicts=[ClaimVerdict(claim_id="c", supported=supported, reason="quote")],
     )
@@ -236,6 +240,11 @@ def dataset_claim() -> Claim:
 
 def aspect_verdict(selected: list[Claim], missing: list[str]) -> VerificationResponse:
     return VerificationResponse(
+        supported_pairs=[
+            ClaimEvidencePair(claim_id=c.claim_id, evidence_id=eid)
+            for c in selected
+            for eid in c.evidence_ids
+        ],
         question_answered=not missing,
         missing_aspects=missing,
         verdicts=[
@@ -435,3 +444,56 @@ async def test_verifier_gets_cited_quotes_without_uncited_source_text() -> None:
     assert len(supplied) == 1 and supplied[0]["evidence_id"] == cited.evidence_id
     assert supplied[0]["quote"] == cited.quote and supplied[0]["paper"] == cited.paper.model_dump()
     assert "content" not in supplied[0]
+
+
+async def test_rag_sends_quote_once_and_retains_unverified_limitations() -> None:
+    notes = ["Unverified limitation: the model reports an unsupported numerical result."]
+    analyst = CapturingProvider([AnswerDraft(claims=claims(), limitations=notes)])
+    reviewer = CapturingProvider([verdict()])
+    search = Search()
+    result = RAGState.model_validate(
+        await build_rag(
+            search,
+            MockProvider(
+                [
+                    QueryPlan(
+                        queries=["rewritten"],
+                        rerank_query="model override",
+                        required_aspects=["method"],
+                    )
+                ]
+            ),
+            MockProvider([]),
+            analyst,
+            reviewer,
+        ).ainvoke(RAGState(query="What training method?"))
+    )
+    assert result.status == "completed"
+    assert result.limitations == notes
+    assert notes[0] not in result.answer
+    assert search.calls[0].rerank_query == "What training method?"
+    assert result.reranked_evidence[0].content == evidence().content
+    supplied = analyst.payloads[0]["evidence"][0]
+    assert supplied["quote"] == evidence().quote
+    assert "content" not in supplied
+    assert "limitations" not in reviewer.payloads[0]
+
+
+async def test_research_sends_quote_once_and_reranks_for_the_subtask_question() -> None:
+    analyst = CapturingProvider([AnalysisResult(claims=claims())])
+    search = Search()
+    result = MultiAgentState.model_validate(
+        await build_research(
+            search,
+            MockProvider([plan()]),
+            MockProvider([]),
+            analyst,
+            MockProvider([verdict()]),
+        ).ainvoke(MultiAgentState(research_question="What training method?"))
+    )
+    assert result.status == "completed"
+    assert search.calls[0].rerank_query == "method?"
+    assert result.evidence_pool[0].content == evidence().content
+    supplied = analyst.payloads[0]["evidence"][0]
+    assert supplied["quote"] == evidence().quote
+    assert "content" not in supplied

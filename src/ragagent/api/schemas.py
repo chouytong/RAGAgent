@@ -1,15 +1,20 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from ragagent.domain.research import MetadataFilter
+from ragagent.domain.research import MetadataFilter, SearchResult
 from ragagent.ingestion.arxiv import ARXIV_ID
 
 
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=10000)
     filters: MetadataFilter = Field(default_factory=MetadataFilter)
+
+
+class SearchResponse(SearchResult):
+    usage: dict[str, dict[str, Any]]
+    usage_scope: Literal["current_request"] = "current_request"
 
 
 class ResearchRequest(BaseModel):
@@ -39,6 +44,9 @@ class PaperResponse(BaseModel):
     year: int | None
     venue: str | None
     arxiv_id: str | None
+    arxiv_family_id: str | None = None
+    arxiv_version: int | None = None
+    source_status: Literal["unknown", "active", "withdrawn", "retracted"] = "unknown"
     status: str
     error_code: str | None
     chunk_count: int
@@ -62,3 +70,4 @@ class PaperPatch(BaseModel):
     authors: list[str] | None = Field(default=None, max_length=100)
     year: int | None = Field(default=None, ge=1000, le=2100)
     venue: str | None = Field(default=None, max_length=256)
+    source_status: Literal["unknown", "active", "withdrawn", "retracted"] | None = None

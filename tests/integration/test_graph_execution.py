@@ -5,6 +5,7 @@ from ragagent.domain.research import (
     AnswerDraft,
     Candidate,
     Claim,
+    ClaimEvidencePair,
     ClaimVerdict,
     QueryPlan,
     VerificationResponse,
@@ -44,6 +45,7 @@ async def test_graph_executes_real_database_retrieval(empty_db: Session) -> None
             [
                 VerificationResponse(
                     question_answered=True,
+                    supported_pairs=[ClaimEvidencePair(claim_id="c", evidence_id=eid)],
                     verdicts=[ClaimVerdict(claim_id="c", supported=True, reason="exact quote")],
                 )
             ]

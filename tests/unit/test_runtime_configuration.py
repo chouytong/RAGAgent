@@ -9,6 +9,7 @@ import pytest
 
 from ragagent.api.schemas import HealthResult
 from ragagent.errors import ConfigurationError, ProviderError
+from ragagent.providers import model_identity
 from ragagent.providers.chat import LiteLLMProvider, Usage
 from ragagent.providers.config import AgentModel, load_config
 from ragagent.providers.embedding import LiteLLMEmbedder
@@ -152,6 +153,11 @@ def test_local_models_are_reused_and_loaded_once_under_concurrency(
     monkeypatch.setitem(
         sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=Encoder)
     )
+    monkeypatch.setattr(
+        model_identity,
+        "resolve_hub_revision",
+        lambda model, revision: "b" * 40 if revision == "new-weights" else "a" * 40,
+    )
     clear_model_cache()
     settings = Settings(_env_file=None, embedding_dimension=2)
     try:
@@ -160,7 +166,7 @@ def test_local_models_are_reused_and_loaded_once_under_concurrency(
             assert len({id(adapter) for adapter in adapters}) == 1
             results = list(executor.map(lambda _: adapters[0]._encode(["fixture"]), range(8)))
         assert results == [[[1.0, 0.0]]] * 8
-        assert loaded == [(settings.embedding_model, None)]
+        assert loaded == [(settings.embedding_model, "a" * 40)]
         assert make_reranker(settings) is make_reranker(settings)
         revised = settings.model_copy(update={"embedding_revision": "new-weights"})
         assert make_embedder(revised) is not adapters[0]

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ragagent.db.models import Chunk, Paper, Section, new_id
+from ragagent.domain.documents import contextual_text
 from ragagent.ingestion.chunker import StructureChunker
 from ragagent.ingestion.parser import Parser
 from ragagent.providers.ports import Embedder
@@ -34,7 +35,9 @@ async def ingest(
         raise ValueError("empty_document")
     if progress is not None:
         progress("indexing")
-    vectors = await embedder.embed([chunk.content for chunk in drafts])
+    vectors = await embedder.embed(
+        [contextual_text(chunk.content, chunk.source_context) for chunk in drafts]
+    )
     if len(vectors) != len(drafts):
         raise ValueError("embedding_count_mismatch")
     sections: dict[str, str] = {}
@@ -74,7 +77,12 @@ async def ingest(
                 token_count=draft.token_count,
                 ordinal=draft.ordinal,
                 embedding=vector,
-                metadata_json={"parser": type(parser).__name__, "section_ids": draft.section_ids},
+                metadata_json={
+                    "parser": type(parser).__name__,
+                    "section_ids": draft.section_ids,
+                    "source_spans": [span.model_dump() for span in draft.source_spans],
+                    "source_context": [context.model_dump() for context in draft.source_context],
+                },
             )
         )
     parse_path = Path(paper.original_path).with_suffix(".parsed.json")

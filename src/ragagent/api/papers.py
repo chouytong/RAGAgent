@@ -98,6 +98,9 @@ def paper_response(session: Session, paper: Paper) -> PaperResponse:
         year=paper.year,
         venue=paper.venue,
         arxiv_id=paper.arxiv_id,
+        arxiv_family_id=paper.arxiv_family_id,
+        arxiv_version=paper.arxiv_version,
+        source_status=paper.source_status,
         status=paper.status,
         error_code=paper.error_code,
         chunk_count=count,
@@ -132,7 +135,20 @@ async def upload(
         sha = digest.hexdigest()
         if any(len(name.strip()) > 256 for name in authors.split(";")):
             raise HTTPException(422, "author_name_too_long")
-        existing = db.scalar(select(Paper).where(Paper.sha256 == sha))
+        # Distinct pinned arXiv versions can have identical PDF bytes. A plain
+        # upload reuses an indexed copy first, then an uploaded/most recent copy.
+        duplicate = (
+            select(Paper)
+            .where(Paper.sha256 == sha)
+            .order_by(
+                (Paper.status == "indexed").desc(),
+                Paper.arxiv_id.is_(None).desc(),
+                Paper.created_at.desc(),
+                Paper.id,
+            )
+            .limit(1)
+        )
+        existing = db.scalar(duplicate)
         if existing:
             path.unlink(missing_ok=True)
             return ingestion_run(db, queue, existing.id)
@@ -145,11 +161,13 @@ async def upload(
                 sha256=sha,
                 original_path=str(path),
             )
-            .on_conflict_do_nothing(index_elements=[Paper.sha256])
+            .on_conflict_do_nothing(
+                index_elements=[Paper.sha256], index_where=Paper.arxiv_id.is_(None)
+            )
             .returning(Paper.id)
         )
         if paper_id is None:
-            existing = db.scalar(select(Paper).where(Paper.sha256 == sha))
+            existing = db.scalar(duplicate)
             if existing is None:
                 raise HTTPException(409, "paper_changed_retry")
             path.unlink(missing_ok=True)
@@ -288,7 +306,9 @@ def update_metadata(paper_id: str, request: PaperPatch, db: DB) -> PaperResponse
         raise HTTPException(404, "paper_not_found")
     if "title" in request.model_fields_set and request.title is None:
         raise HTTPException(422, "title_cannot_be_null")
-    for field in ["title", "year", "venue"]:
+    if "source_status" in request.model_fields_set and request.source_status is None:
+        raise HTTPException(422, "source_status_cannot_be_null")
+    for field in ["title", "year", "venue", "source_status"]:
         if field in request.model_fields_set:
             setattr(paper, field, getattr(request, field))
     if "authors" in request.model_fields_set:

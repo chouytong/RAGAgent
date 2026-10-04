@@ -148,3 +148,51 @@ def test_manifest_fallback_distinguishes_configured_revisions_from_actual_adapte
     assert missing["embedding_revision"] is None
     assert missing["embedding_api_base"] is None
     assert missing["reranker_revision"] is None
+
+
+def test_workflow_cost_includes_embedding_and_excludes_judge() -> None:
+    from ragagent.evaluation.artifacts import workflow_usage
+
+    chat = MockProvider([])
+    embedding = MockProvider([])
+    judge = MockProvider([])
+    for provider in (chat, embedding, judge):
+        provider.usage = Usage()
+    before = [usage_snapshot(provider) for provider in (chat, embedding, judge)]
+    chat.usage.record_cost(2.0)
+    embedding.usage.prompt_tokens = 30
+    embedding.usage.record_identity("embedding-snapshot-1")
+    embedding.usage.record_cost(0.25)
+    judge.usage.record_cost(0.5)
+    usage = {
+        name: usage_delta(snapshot, usage_snapshot(provider))
+        for name, snapshot, provider in zip(
+            ("analyst", "embedding", "judge"), before, (chat, embedding, judge), strict=True
+        )
+    }
+    assert workflow_usage(usage)["total_workflow_cost"] == 2.25
+    assert workflow_usage(usage)["total_workflow_tokens"] == 30
+    assert usage["embedding"]["provider_models"] == ["embedding-snapshot-1"]
+    embedding.usage.record_cost(None)
+    usage["embedding"] = usage_delta(before[1], usage_snapshot(embedding))
+    assert workflow_usage(usage)["total_workflow_cost"] is None
+    assert workflow_usage(usage)["unknown_workflow_cost_calls"] == 1
+
+
+def test_failed_evaluation_artifact_is_downloadable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ragagent.api.evaluations import artifact
+    from ragagent.db.models import Run
+
+    run = Run(id="00000000-0000-0000-0000-000000000001", kind="eval_rag", status="failed")
+    path = tmp_path / "evaluations" / run.id
+    path.mkdir(parents=True)
+    (path / "results.json").write_text('{"status": "partial"}')
+    monkeypatch.setattr(
+        "ragagent.api.evaluations.get_settings", lambda: Settings(data_dir=tmp_path)
+    )
+    db = SimpleNamespace(get=lambda model, run_id: run)
+    response = artifact(run.id, "results.json", db)
+    assert response.path == path / "results.json"

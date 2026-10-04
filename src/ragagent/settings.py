@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,7 +32,14 @@ class Settings(BaseSettings):
     rag_evidence_budget: int = Field(default=48, ge=1, le=256)
     research_evidence_budget: int = Field(default=96, ge=1, le=512)
     provider_timeout: float = Field(default=60, gt=0, le=300)
+    evaluation_timeout_seconds: int = Field(default=7200, ge=1800, le=86400)
     max_upload_bytes: int = Field(default=30 * 1024 * 1024, ge=1)
+
+    @model_validator(mode="after")
+    def valid_chunk_overlap(self) -> "Settings":
+        if self.chunk_overlap_tokens >= self.chunk_target_tokens:
+            raise ValueError("chunk_overlap_tokens must be less than chunk_target_tokens")
+        return self
 
 
 @lru_cache

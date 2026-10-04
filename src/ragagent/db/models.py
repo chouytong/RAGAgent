@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -31,13 +32,37 @@ class Base(DeclarativeBase):
 
 class Paper(Base):
     __tablename__ = "papers"
+    __table_args__ = (
+        CheckConstraint(
+            "source_status IN ('unknown', 'active', 'withdrawn', 'retracted')",
+            name="ck_papers_source_status",
+        ),
+        CheckConstraint(
+            "arxiv_version IS NULL OR (arxiv_version > 0 AND arxiv_family_id IS NOT NULL)",
+            name="ck_papers_arxiv_version",
+        ),
+        UniqueConstraint("arxiv_family_id", "arxiv_version", name="uq_papers_arxiv_version"),
+        Index(
+            "uq_papers_uploaded_sha256",
+            "sha256",
+            unique=True,
+            postgresql_where=text("arxiv_id IS NULL"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     title: Mapped[str] = mapped_column(Text)
     year: Mapped[int | None] = mapped_column(Integer, index=True)
     venue: Mapped[str | None] = mapped_column(String(256), index=True)
     arxiv_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    arxiv_family_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    arxiv_version: Mapped[int | None] = mapped_column(Integer)
+    # This is a source annotation, independent of indexing/processing status.
+    # Atom resolution alone cannot prove that a paper is active or not retracted.
+    source_status: Mapped[Literal["unknown", "active", "withdrawn", "retracted"]] = mapped_column(
+        String(32), default="unknown", server_default="unknown"
+    )
     source_url: Mapped[str | None] = mapped_column(Text)
-    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(32), default="queued")
     error_code: Mapped[str | None] = mapped_column(String(64))
     original_path: Mapped[str] = mapped_column(Text)

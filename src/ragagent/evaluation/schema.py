@@ -60,6 +60,10 @@ class EvaluationDataset(BaseModel):
 
 class EvaluationRequest(BaseModel):
     dataset: EvaluationDataset
+    resume_run_id: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    )
 
 
 class CitationPair(BaseModel):

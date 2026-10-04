@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from ragagent.providers import model_identity
 from ragagent.retrieval.reranker import CrossEncoderReranker
 from tests.unit.helpers import candidate
 
@@ -25,6 +26,13 @@ async def test_cross_encoder_revision_ranking_and_model_reuse(
     package = ModuleType("sentence_transformers")
     package.CrossEncoder = Encoder
     monkeypatch.setitem(sys.modules, "sentence_transformers", package)
+    resolved: list[tuple[str, str | None]] = []
+
+    def resolve(model: str, revision: str | None) -> str:
+        resolved.append((model, revision))
+        return "a" * 40
+
+    monkeypatch.setattr(model_identity, "resolve_hub_revision", resolve)
     reranker = CrossEncoderReranker("fixture-model", revision=revision)
     candidates = [candidate("first"), candidate("second")]
     first = await reranker.rerank("query", candidates, 1)
@@ -32,4 +40,5 @@ async def test_cross_encoder_revision_ranking_and_model_reuse(
     assert first[0].evidence.chunk_id == "second"
     assert [item.evidence.chunk_id for item in second] == ["second", "first"]
     assert first[0].evidence.scores["rerank"] == 3.0
-    assert loaded == [("fixture-model", {} if revision is None else {"revision": revision})]
+    assert loaded == [("fixture-model", {"revision": "a" * 40})]
+    assert resolved == [("fixture-model", revision)]

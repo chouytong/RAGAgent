@@ -13,6 +13,7 @@ from ragagent.graphs.state import (
 from ragagent.providers.chat import ChatProvider
 from ragagent.retrieval.evidence import (
     accepted_evidence,
+    evidence_payload,
     merge_evidence,
     render_claims,
     verify_claims,
@@ -130,6 +131,7 @@ def build_research(
             result = await search.search(
                 QueryPlan(
                     queries=queries,
+                    rerank_query=task.question,
                     question_type="synthesis",
                     required_aspects=[task.aspect],
                     filters=task.filters,
@@ -170,7 +172,7 @@ def build_research(
                 {
                     "question": state.research_question,
                     "plan": state.research_plan.model_dump(),
-                    "evidence": [e.model_dump() for e in state.evidence_pool],
+                    "evidence": [evidence_payload(e) for e in state.evidence_pool],
                     "previous_analysis": [a.model_dump() for a in state.analysis_results],
                     "feedback": state.review_result.model_dump() if state.review_result else None,
                 },

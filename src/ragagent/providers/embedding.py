@@ -8,7 +8,9 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from ragagent.errors import ConfigurationError, ProviderError
+from ragagent.providers.chat import Usage
 from ragagent.providers.environment import runtime_value
+from ragagent.providers.model_identity import LocalModelIdentity
 
 SUPPORTED_EMBEDDING_PROVIDERS = frozenset({"openai", "cohere", "cohere_chat", "voyage"})
 
@@ -17,33 +19,53 @@ class LocalEmbedder:
     def __init__(self, model: str, dimension: int, revision: str | None = None) -> None:
         self.model_name = model
         self.dimension = dimension
-        self.revision = revision
+        self.identity = LocalModelIdentity(model, revision)
+        self.usage = Usage()
         self._model: Any = None
         self._load_lock = threading.Lock()
 
     @property
+    def revision(self) -> str:
+        return self.identity.revision
+
+    @property
     def fingerprint(self) -> str:
-        original = f"local:{self.model_name}:{self.dimension}"
-        return original if self.revision is None else f"{original}:revision:{self.revision}"
+        revision = self.revision
+        self.identity.verify_directory()
+        identity = json.dumps(
+            {
+                "backend": "local",
+                "model": self.model_name,
+                "dimension": self.dimension,
+                "revision": revision,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return "local:v2:" + hashlib.sha256(identity.encode()).hexdigest()
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
         from sentence_transformers import SentenceTransformer
 
+        revision = self.identity.sdk_revision
         if self._model is None:
             with self._load_lock:
                 if self._model is None:
                     self._model = (
                         SentenceTransformer(self.model_name)
-                        if self.revision is None
-                        else SentenceTransformer(self.model_name, revision=self.revision)
+                        if revision is None
+                        else SentenceTransformer(self.model_name, revision=revision)
                     )
         vectors: list[list[float]] = self._model.encode(texts, normalize_embeddings=True).tolist()
+        self.identity.verify_directory()
         validate_vectors(vectors, len(texts), self.dimension)
         return vectors
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         try:
-            return await asyncio.to_thread(self._encode, texts)
+            vectors = await asyncio.to_thread(self._encode, texts)
+            self.usage.record_cost(0.0)
+            return vectors
         except Exception:
             raise ProviderError("local_embedding_failed") from None
 
@@ -62,6 +84,7 @@ class LiteLLMEmbedder:
         self.api_base = embedding_endpoint(model, api_base)
         self.revision = revision
         self.api_key_env = api_key_env
+        self.usage = Usage()
 
     @property
     def fingerprint(self) -> str:
@@ -91,9 +114,31 @@ class LiteLLMEmbedder:
             key = runtime_value(key_env) if key_env else None
             if self.api_key_env and not key:
                 raise ConfigurationError("embedding_key_missing")
-            response = await litellm.aembedding(
-                model=self.model, input=texts, api_base=self.api_base, api_key=key, timeout=60
+            self.usage.begin_call()
+            try:
+                response = await litellm.aembedding(
+                    model=self.model, input=texts, api_base=self.api_base, api_key=key, timeout=60
+                )
+            except BaseException:
+                # A timeout/cancellation can occur after the provider accepted a billed request.
+                self.usage.record_cost(None)
+                raise
+            try:
+                cost = float(litellm.completion_cost(completion_response=response))
+            except Exception:
+                cost = None
+            self.usage.record_identity(
+                getattr(response, "model", None), getattr(response, "system_fingerprint", None)
             )
+            response_usage = getattr(response, "usage", None)
+            tokens = (
+                response_usage.get("prompt_tokens", 0)
+                if isinstance(response_usage, dict)
+                else getattr(response_usage, "prompt_tokens", 0)
+            )
+            if isinstance(tokens, int) and tokens >= 0:
+                self.usage.prompt_tokens += tokens
+            self.usage.record_cost(cost)
             vectors = [row["embedding"] for row in sorted(response.data, key=lambda r: r["index"])]
             validate_vectors(vectors, len(texts), self.dimension)
             return vectors

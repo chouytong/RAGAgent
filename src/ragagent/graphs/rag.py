@@ -5,7 +5,13 @@ from ragagent.domain.research import AnswerDraft, QueryExpansion, QueryPlan, Suf
 from ragagent.graphs.common import constrain_filters
 from ragagent.graphs.state import RAGState, RAGUpdate
 from ragagent.providers.chat import ChatProvider
-from ragagent.retrieval.evidence import evidence_gate, merge_evidence, render_claims, verify_claims
+from ragagent.retrieval.evidence import (
+    evidence_gate,
+    evidence_payload,
+    merge_evidence,
+    render_claims,
+    verify_claims,
+)
 from ragagent.retrieval.service import SearchPort
 
 
@@ -31,6 +37,7 @@ def build_rag(
             QueryPlan,
         )
         result.filters = constrain_filters(result.filters, state.filters)
+        result.rerank_query = state.query
         return {"query_plan": result, "query_type": result.question_type, "status": "retrieving"}
 
     async def retrieve(state: RAGState) -> RAGUpdate:
@@ -46,6 +53,7 @@ def build_rag(
             "sufficiency": gate,
             "retrieval_attempt": state.retrieval_attempt + 1,
             "claims": [],
+            "limitations": [],
             "answer": "",
             "citation_validation": None,
             "errors": list(
@@ -69,11 +77,11 @@ def build_rag(
             {
                 "query": state.query,
                 "required_aspects": state.query_plan.required_aspects,
-                "evidence": [e.model_dump() for e in state.reranked_evidence],
+                "evidence": [evidence_payload(e) for e in state.reranked_evidence],
             },
             AnswerDraft,
         )
-        return {"claims": result.claims, "status": "reviewing"}
+        return {"claims": result.claims, "limitations": result.limitations, "status": "reviewing"}
 
     async def verify(state: RAGState) -> RAGUpdate:
         assert state.query_plan is not None

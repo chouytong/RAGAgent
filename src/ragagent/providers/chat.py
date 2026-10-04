@@ -1,7 +1,8 @@
 import json
 import math
 from collections import deque
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
@@ -22,14 +23,49 @@ class Usage:
     known_cost: float = 0.0
     unknown_cost_calls: int = 0
     calls: int = 0
+    in_flight_calls: int = 0
+    provider_models: list[str] = field(default_factory=list)
+    system_fingerprints: list[str] = field(default_factory=list)
+    on_update: Callable[["Usage"], None] | None = field(default=None, repr=False)
+
+    def record_identity(self, model: Any, fingerprint: Any = None) -> None:
+        if isinstance(model, str) and model not in self.provider_models:
+            self.provider_models.append(model)
+        if isinstance(fingerprint, str) and fingerprint not in self.system_fingerprints:
+            self.system_fingerprints.append(fingerprint)
+
+    def begin_call(self) -> None:
+        # Persist an unknown charge before dispatch: a killed worker cannot finish accounting.
+        self.in_flight_calls += 1
+        self.cost = None
+        if self.on_update is not None:
+            self.on_update(self)
 
     def record_cost(self, cost: float | None) -> None:
+        self.in_flight_calls = max(0, self.in_flight_calls - 1)
         self.calls += 1
         if cost is None or not math.isfinite(cost) or cost < 0:
             self.unknown_cost_calls += 1
         else:
             self.known_cost += cost
-        self.cost = None if self.unknown_cost_calls else self.known_cost
+        self.cost = None if self.unknown_cost_calls or self.in_flight_calls else self.known_cost
+        if self.on_update is not None:
+            self.on_update(self)
+
+
+def usage_record(usage: Usage) -> dict[str, Any]:
+    """Persist counters and returned identities without callbacks, prompts or secrets."""
+    return {
+        "prompt_tokens": usage.prompt_tokens,
+        "completion_tokens": usage.completion_tokens,
+        "cost": usage.cost,
+        "known_cost": usage.known_cost,
+        "unknown_cost_calls": usage.unknown_cost_calls + usage.in_flight_calls,
+        "calls": usage.calls + usage.in_flight_calls,
+        "in_flight_calls": usage.in_flight_calls,
+        "provider_models": list(usage.provider_models),
+        "system_fingerprints": list(usage.system_fingerprints),
+    }
 
 
 class ChatProvider(Protocol):
@@ -71,6 +107,7 @@ class LiteLLMProvider:
                 reraise=True,
             ):
                 with attempt:
+                    self.usage.begin_call()
                     try:
                         response = await litellm.acompletion(
                             model=self.model.litellm_model,
@@ -88,6 +125,9 @@ class LiteLLMProvider:
             if response.usage:
                 self.usage.prompt_tokens += response.usage.prompt_tokens or 0
                 self.usage.completion_tokens += response.usage.completion_tokens or 0
+            self.usage.record_identity(
+                getattr(response, "model", None), getattr(response, "system_fingerprint", None)
+            )
             try:
                 cost = float(litellm.completion_cost(completion_response=response))
             except Exception:

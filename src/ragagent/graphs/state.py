@@ -23,6 +23,8 @@ class RAGState(BaseModel):
     reranked_evidence: list[EvidenceRecord] = Field(default_factory=list)
     answer: str = ""
     claims: list[Claim] = Field(default_factory=list)
+    # Analyst notes are retained for inspection, never released as verified factual prose.
+    limitations: list[str] = Field(default_factory=list)
     citation_validation: CitationValidation | None = None
     sufficiency: EvidenceSufficiencyResult | None = None
     retrieval_attempt: int = 0
@@ -38,6 +40,7 @@ class RAGUpdate(TypedDict, total=False):
     reranked_evidence: list[EvidenceRecord]
     answer: str
     claims: list[Claim]
+    limitations: list[str]
     citation_validation: CitationValidation | None
     sufficiency: EvidenceSufficiencyResult
     retrieval_attempt: int

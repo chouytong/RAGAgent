@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field, model_validator
 from ragagent.errors import ConfigurationError
 from ragagent.providers.environment import runtime_value
 
+MODEL_ENVIRONMENT = re.compile(r"[A-Z][A-Z0-9_]*_MODEL")
+SENSITIVE_ENVIRONMENT_PARTS = {"KEY", "SECRET", "PASSWORD", "TOKEN", "CREDENTIAL", "CREDENTIALS"}
+
 
 class AgentModel(BaseModel):
     provider: Literal["openai", "anthropic", "deepseek", "ollama_chat", "openai_compatible"]
@@ -18,6 +21,8 @@ class AgentModel(BaseModel):
 
     @model_validator(mode="after")
     def local_base(self) -> "AgentModel":
+        if "${" in self.model or (self.api_base is not None and "${" in self.api_base):
+            raise ValueError("unresolved_provider_environment")
         if self.provider == "openai_compatible" and not self.api_base:
             raise ValueError("api_base required for compatible provider")
         if self.api_base:
@@ -31,8 +36,6 @@ class AgentModel(BaseModel):
                 or url.fragment
             ):
                 raise ValueError("api_base_must_not_contain_credentials_or_query")
-        if "${" in self.model:
-            raise ValueError("unresolved_model_environment")
         return self
 
     @property
@@ -63,6 +66,10 @@ class ProviderConfig(BaseModel):
 def load_config(path: Path) -> ProviderConfig:
     def substitute(match: re.Match[str]) -> str:
         name, _, default = match.group(1).partition(":-")
+        if not MODEL_ENVIRONMENT.fullmatch(name) or SENSITIVE_ENVIRONMENT_PARTS.intersection(
+            name.split("_")
+        ):
+            raise ConfigurationError("unsafe_model_environment")
         value = runtime_value(name)
         if value is None:
             value = default
@@ -71,8 +78,14 @@ def load_config(path: Path) -> ProviderConfig:
         return value
 
     try:
-        text = re.sub(r"\$\{([^}]+)\}", substitute, path.read_text())
-        return ProviderConfig.model_validate(yaml.safe_load(text))
+        # Parse first: substitutions must never alter YAML structure or expose
+        # runtime secrets through URLs or other exported mapping fields.
+        data = yaml.safe_load(path.read_text())
+        if isinstance(data, dict) and isinstance(data.get("agents"), dict):
+            for model in data["agents"].values():
+                if isinstance(model, dict) and isinstance(model.get("model"), str):
+                    model["model"] = re.sub(r"\$\{([^}]+)\}", substitute, model["model"])
+        return ProviderConfig.model_validate(data)
     except ConfigurationError:
         raise
     except Exception:
