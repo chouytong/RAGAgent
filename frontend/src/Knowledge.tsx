@@ -1,24 +1,49 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Paper, Run, api } from "./api";
+const pageSize = 50;
 export function Knowledge() {
   const [papers, setPapers] = useState<z.infer<typeof Paper>[]>([]),
     [error, setError] = useState(""),
     [arxiv, setArxiv] = useState(""),
     [busy, setBusy] = useState(false),
-    [task, setTask] = useState("");
-  async function refresh() {
+    [task, setTask] = useState(""),
+    [offset, setOffset] = useState(0),
+    [hasNext, setHasNext] = useState(false),
+    [loading, setLoading] = useState(false);
+  const requestSequence = useRef(0);
+  async function refresh(pageOffset = offset, signal?: AbortSignal) {
+    const sequence = ++requestSequence.current;
+    setLoading(true);
     try {
-      setPapers(await api("/api/papers", z.array(Paper)));
+      const items = await api(
+        `/api/papers?limit=${pageSize + 1}&offset=${pageOffset}`,
+        z.array(Paper),
+        undefined,
+        "GET",
+        signal,
+      );
+      if (signal?.aborted || sequence !== requestSequence.current) return;
+      setPapers(items.slice(0, pageSize));
+      setHasNext(items.length > pageSize);
+      setError("");
     } catch (e) {
-      setError(String(e));
+      if (!signal?.aborted && sequence === requestSequence.current)
+        setError(String(e));
+    } finally {
+      if (!signal?.aborted && sequence === requestSequence.current)
+        setLoading(false);
     }
   }
   useEffect(() => {
-    void refresh();
-    const i = setInterval(() => void refresh(), 5000);
-    return () => clearInterval(i);
-  }, []);
+    const controller = new AbortController();
+    void refresh(offset, controller.signal);
+    const i = setInterval(() => void refresh(offset, controller.signal), 5000);
+    return () => {
+      clearInterval(i);
+      controller.abort();
+    };
+  }, [offset]);
   async function upload(form: HTMLFormElement) {
     setBusy(true);
     setError("");
@@ -27,7 +52,8 @@ export function Knowledge() {
       if (!data.get("year")) data.delete("year");
       const r = await api("/api/papers/upload", Run, data);
       setTask(r.id);
-      await refresh();
+      if (offset) setOffset(0);
+      else await refresh();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -36,9 +62,12 @@ export function Knowledge() {
   }
   async function importArxiv() {
     setBusy(true);
+    setError("");
     try {
       const r = await api("/api/papers/arxiv", Run, { arxiv_id: arxiv });
       setTask(r.id);
+      if (offset) setOffset(0);
+      else await refresh();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -91,8 +120,25 @@ export function Knowledge() {
       </div>
       {task && <p>后台任务：{task}。首次解析和模型加载可能需要数分钟。</p>}
       {error && <p role="alert">{error}</p>}
-      <button onClick={() => void refresh()}>刷新</button>
-      <table>
+      <div className="inline" aria-label="文献分页">
+        <button disabled={loading} onClick={() => void refresh()}>
+          刷新
+        </button>
+        <button
+          disabled={loading || offset === 0}
+          onClick={() => setOffset(Math.max(0, offset - pageSize))}
+        >
+          上一页
+        </button>
+        <button
+          disabled={loading || !hasNext}
+          onClick={() => setOffset(offset + pageSize)}
+        >
+          下一页
+        </button>
+        <p role="status">第 {offset / pageSize + 1} 页</p>
+      </div>
+      <table aria-busy={loading}>
         <thead>
           <tr>
             <th>论文</th>
@@ -126,7 +172,13 @@ export function Knowledge() {
           ))}
         </tbody>
       </table>
-      {!papers.length && <p>知识库为空。先上传 PDF 或导入 arXiv 论文。</p>}
+      {!loading && !error && !papers.length && (
+        <p>
+          {offset
+            ? "此页没有文献，请返回上一页。"
+            : "知识库为空。先上传 PDF 或导入 arXiv 论文。"}
+        </p>
+      )}
     </section>
   );
 }

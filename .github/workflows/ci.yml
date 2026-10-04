@@ -14,9 +14,16 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ragagent -d ragagent"
           --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7.4.2-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       DATABASE_URL: postgresql+psycopg://ragagent:ragagent@localhost:5432/ragagent
       TEST_DATABASE_URL: postgresql+psycopg://ragagent:ragagent@localhost:5432/ragagent
+      TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -47,6 +54,8 @@ jobs:
       - run: npm run lint
       - run: npm run check
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
   compose:
     runs-on: ubuntu-latest
     steps:
@@ -55,5 +64,6 @@ jobs:
       - run: docker compose config --quiet
       - run: docker compose up -d --build --wait --wait-timeout 300
       - run: curl --fail http://127.0.0.1:8000/api/health && curl --fail http://127.0.0.1:8080/ >/dev/null
+      - run: python scripts/smoke.py
       - if: always()
         run: docker compose logs --tail=100 && docker compose down

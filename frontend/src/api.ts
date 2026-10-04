@@ -64,8 +64,10 @@ export async function api<T>(
   schema: z.ZodType<T>,
   body?: unknown,
   method = "POST",
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(path, {
+    signal,
     method: body === undefined ? "GET" : method,
     headers:
       body instanceof FormData ? {} : { "Content-Type": "application/json" },

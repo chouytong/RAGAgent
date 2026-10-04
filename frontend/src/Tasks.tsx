@@ -27,6 +27,7 @@ export function Tasks({ research }: { research: boolean }) {
   useEffect(() => {
     if (!id) return;
     const es = new EventSource(`/api/runs/${id}/events`);
+    es.addEventListener("open", () => setError(""));
     es.addEventListener("execution", (event) => {
       try {
         setError("");
@@ -41,9 +42,11 @@ export function Tasks({ research }: { research: boolean }) {
     es.addEventListener("done", (event) => {
       try {
         setRun(Run.parse(JSON.parse((event as MessageEvent<string>).data)));
+        setError("");
         setBusy(false);
       } catch {
         setError("结果格式错误");
+        setBusy(false);
       }
       es.close();
     });

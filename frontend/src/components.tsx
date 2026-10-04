@@ -41,6 +41,9 @@ export function FilterEditor({
     "methods",
     "metrics",
   ] as const;
+  const [inputs, setInputs] = useState(() =>
+    Object.fromEntries(fields.map((key) => [key, value[key].join(";")])),
+  );
   return (
     <details>
       <summary>文献过滤条件（同字段 OR，不同字段 AND）</summary>
@@ -50,16 +53,18 @@ export function FilterEditor({
             {key}
             <input
               placeholder="多个值用分号分隔"
-              value={value[key].join(";")}
-              onChange={(e) =>
+              value={inputs[key]}
+              onChange={(e) => {
+                const text = e.target.value;
+                setInputs((previous) => ({ ...previous, [key]: text }));
                 onChange({
                   ...value,
-                  [key]: e.target.value
+                  [key]: text
                     .split(";")
                     .map((s) => s.trim())
                     .filter(Boolean),
-                })
-              }
+                });
+              }}
             />
           </label>
         ))}
