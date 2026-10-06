@@ -696,3 +696,22 @@ after this change, without further YAML/expression findings.
 - `tests/unit/test_conversation_context.py`
 - `tests/unit/test_conversation_contracts.py`
 - `tests/unit/test_conversation_evaluation.py`
+
+## Bilingual README (2026-10-06)
+
+Retained `README.md` as the English edition and added a complete Simplified Chinese
+edition in `README.zh-CN.md`, with reciprocal language links at the top. Both
+editions cover the same eight sections, commands, API examples, architecture and
+scientific/data-handling limitations. Code examples and Mermaid diagrams remain
+identical across editions.
+
+Changed files: `README.md`, `README.zh-CN.md`, `docs/stage-log.md`.
+Targeted checks passed: eight matching sections, seven identical fenced code
+blocks, preserved original documentation links, valid relative link targets and
+reciprocal language navigation; `git diff --check` passed. This is a documentation
+change, so application tests were not rerun locally.
+
+The preceding implementation head `670cc5f0ffdc873b1cfc2e91828e15f7d0a5896d`
+also completed GitHub's PR-triggered CI and Desktop workflows successfully
+(runs `37417995238` and `37417995251`). This does not change the recorded gaps in
+real-paper/actual-model scientific acceptance or platform packaging validation.

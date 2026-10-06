@@ -1,5 +1,7 @@
 # Scientific RAGAgent
 
+**English | [简体中文](README.zh-CN.md)**
+
 A local scientific literature assistant with persistent RAG/Research chats,
 inspectable conversation memory and a Tauri desktop entry. It retains the existing
 evidence-grounded knowledge base and Supervisor workflows. MIT licensed; paper and model-weight licenses remain
