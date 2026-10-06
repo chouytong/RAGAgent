@@ -24,7 +24,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://ragagent:ragagent@127.0.0.1:5432/ragagent
       REDIS_URL: redis://127.0.0.1:6379/14
-      DATA_DIR: ${{ runner.temp }}/desktop-data
+      DATA_DIR: /tmp/ragagent-desktop-data
       CARGO_BUILD_JOBS: '2'
     defaults:
       run:

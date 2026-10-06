@@ -597,6 +597,14 @@ Published review branch: `feature/desktop-conversations`, stacked on
 corresponding fully tested local commits. The actual-model, real-paper native
 multi-turn/restart/Research acceptance scenario remains unverified.
 
+GitHub's backend, frontend and Compose jobs also passed on the published head.
+Publication caught a Desktop workflow configuration error before any job started:
+`runner.temp` is unavailable in job-level `env`. Its test-only `DATA_DIR` now uses
+an isolated Linux runner's `/tmp/ragagent-desktop-data`; application code and
+the verified native build are unaffected.
+Actionlint 1.7.7 reproduced the original context error and passed both workflows
+after this change, without further YAML/expression findings.
+
 ### Changed files
 
 - `.dockerignore`
