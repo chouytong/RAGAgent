@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { isDesktop, openPaperPdf } from "./transport";
 import type { Evidence, SourceStatus } from "./api";
 export const sourceStatusLabels: Record<SourceStatus, string> = {
   unknown: "来源状态未核验",
@@ -74,6 +77,25 @@ export function FilterEditor({
   const [inputs, setInputs] = useState(() =>
     Object.fromEntries(fields.map((key) => [key, value[key].join(";")])),
   );
+  useEffect(() => {
+    // Keep incomplete separators/whitespace while typing, but reflect resets
+    // and other controlled changes from the parent in the displayed fields.
+    setInputs((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      for (const key of fields) {
+        const parsed = previous[key]
+          .split(";")
+          .map((part) => part.trim())
+          .filter(Boolean);
+        if (JSON.stringify(parsed) !== JSON.stringify(value[key])) {
+          next[key] = value[key].join(";");
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [value]);
   return (
     <details>
       <summary>文献过滤条件（同字段 OR，不同字段 AND）</summary>
@@ -117,6 +139,12 @@ export function FilterEditor({
     </details>
   );
 }
+type MarkdownNode = {
+  type: string;
+  value?: string;
+  url?: string;
+  children?: MarkdownNode[];
+};
 export function Citations({
   text,
   evidence,
@@ -125,33 +153,97 @@ export function Citations({
   evidence: Evidence[];
 }) {
   const [selected, setSelected] = useState<Evidence | null>(null);
+  const [error, setError] = useState("");
+  function remarkEvidence() {
+    return (tree: unknown) => {
+      function walk(node: MarkdownNode) {
+        if (
+          !node.children ||
+          ["link", "code", "inlineCode", "image"].includes(node.type)
+        )
+          return;
+        node.children = node.children.flatMap((child) => {
+          if (child.type !== "text" || !child.value) {
+            walk(child);
+            return [child];
+          }
+          return child.value.split(/(\[E:[0-9a-f-]{36}\])/g).map((part) => {
+            const id = part.match(/^\[E:([0-9a-f-]{36})\]$/)?.[1];
+            const source = evidence.find((item) => item.evidence_id === id);
+            return source
+              ? {
+                  type: "link",
+                  url: `#evidence-${id}`,
+                  children: [
+                    { type: "text", value: `文献 · p.${source.page_start}` },
+                  ],
+                }
+              : { type: "text", value: part };
+          });
+        });
+      }
+      walk(tree as MarkdownNode);
+    };
+  }
+  const pdf = (paperId: string, page: number, label: string) => (
+    <a
+      href={`/api/papers/${paperId}/pdf#page=${page}`}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => {
+        if (isDesktop()) {
+          event.preventDefault();
+          void openPaperPdf(paperId, page).catch((e) => setError(String(e)));
+        }
+      }}
+    >
+      {label}
+    </a>
+  );
   return (
     <>
-      <div className="report">
-        {text.split(/(\[E:[0-9a-f-]{36}\])/g).map((part, i) => {
-          const id = part.match(/^\[E:([0-9a-f-]{36})\]$/)?.[1];
-          const e = evidence.find((e) => e.evidence_id === id);
-          return e ? (
-            <button key={i} className="citation" onClick={() => setSelected(e)}>
-              文献 · p.{e.page_start}
-            </button>
-          ) : (
-            <span key={i}>{part}</span>
-          );
-        })}
+      <div className="report markdown">
+        <Markdown
+          skipHtml
+          remarkPlugins={[remarkGfm, remarkEvidence]}
+          components={{
+            a: ({ href, children }) => {
+              const source = href?.startsWith("#evidence-")
+                ? evidence.find((item) => item.evidence_id === href.slice(10))
+                : undefined;
+              return source ? (
+                <button
+                  className="citation"
+                  onClick={() => setSelected(source)}
+                >
+                  {children}
+                </button>
+              ) : (
+                <a href={href} target="_blank" rel="noreferrer">
+                  {children}
+                </a>
+              );
+            },
+            img: () => null,
+          }}
+        >
+          {text}
+        </Markdown>
       </div>
       <details>
         <summary>证据 ({evidence.length})</summary>
-        {evidence.map((e) => (
+        {evidence.map((item) => (
           <button
             className="evidence"
-            key={e.evidence_id}
-            onClick={() => setSelected(e)}
+            key={item.evidence_id}
+            onClick={() => setSelected(item)}
           >
-            {e.paper.title} — {e.section_path} · p.{e.page_start}–{e.page_end}
+            {item.paper.title} — {item.section_path} · p.{item.page_start}–
+            {item.page_end}
           </button>
         ))}
       </details>
+      {error && <p role="alert">{error}</p>}
       {selected && (
         <dialog open aria-label="引用原文">
           <button onClick={() => setSelected(null)}>关闭</button>
@@ -166,11 +258,11 @@ export function Citations({
           {selected.source_spans.length > 0 && (
             <details>
               <summary>主引用来源定位</summary>
-              {selected.source_spans.map((span, i) => (
-                <small key={i}>
+              {selected.source_spans.map((span, index) => (
+                <small key={index}>
                   来源：{span.source_id} · 原文字符 {span.span_start}–
-                  {span.span_end}
-                  {" · "}Chunk 字符 {span.chunk_start}–{span.chunk_end}
+                  {span.span_end} · Chunk 字符 {span.chunk_start}–
+                  {span.chunk_end}
                 </small>
               ))}
             </details>
@@ -178,12 +270,13 @@ export function Citations({
           {selected.source_context.length > 0 && (
             <div aria-label="辅助原文">
               <h4>辅助原文（表头、表题等，独立来源片段）</h4>
-              {selected.source_context.map((context, i) => (
-                <div key={`${context.source_id}:${context.span_start}:${i}`}>
+              {selected.source_context.map((context, index) => (
+                <div
+                  key={`${context.source_id}:${context.span_start}:${index}`}
+                >
                   <p>
                     {context.element_type} · {context.section_path.join(" / ")}{" "}
-                    · p.
-                    {context.page_start}–{context.page_end}
+                    · p.{context.page_start}–{context.page_end}
                   </p>
                   <small>
                     来源：{context.source_id} · 原文字符{" "}
@@ -193,24 +286,74 @@ export function Citations({
                   <blockquote aria-label="辅助引用原文">
                     {context.quote}
                   </blockquote>
-                  <a
-                    href={`/api/papers/${selected.paper.paper_id}/pdf#page=${context.page_start}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    打开辅助片段所在 PDF 页
-                  </a>
+                  {pdf(
+                    selected.paper.paper_id,
+                    context.page_start,
+                    "打开辅助片段所在 PDF 页",
+                  )}
                 </div>
               ))}
             </div>
           )}
-          <a
-            href={`/api/papers/${selected.paper.paper_id}/pdf#page=${selected.page_start}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            打开原始 PDF
-          </a>
+          {pdf(selected.paper.paper_id, selected.page_start, "打开原始 PDF")}
+        </dialog>
+      )}
+    </>
+  );
+}
+export function ConfirmAction({
+  label,
+  description,
+  onConfirm,
+  disabled = false,
+}: {
+  label: string;
+  description: string;
+  onConfirm: () => Promise<void>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          setOpen(true);
+          setError("");
+        }}
+      >
+        {label}
+      </button>
+      {open && (
+        <dialog className="confirm-dialog" open aria-label={`${label}确认`}>
+          <h3>{label}</h3>
+          <p>{description}</p>
+          {error && <p role="alert">{error}</p>}
+          <div className="inline">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void onConfirm()
+                  .then(() => setOpen(false))
+                  .catch((e) => setError(String(e)))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              确认{label}
+            </button>
+          </div>
         </dialog>
       )}
     </>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Paper, Run, api } from "./api";
 import type { SourceStatus } from "./api";
+import { isDesktop, openPaperPdf } from "./transport";
 import { SourceProvenance, sourceStatusLabels } from "./components";
 const pageSize = 50;
 export function Knowledge() {
@@ -188,6 +189,12 @@ export function Knowledge() {
               <td>
                 <a
                   href={`/api/papers/${p.id}/pdf`}
+                  onClick={(event) => {
+                    if (isDesktop()) {
+                      event.preventDefault();
+                      void openPaperPdf(p.id).catch((e) => setError(String(e)));
+                    }
+                  }}
                   target="_blank"
                   rel="noreferrer"
                 >

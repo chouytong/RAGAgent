@@ -1,5 +1,4 @@
-node_modules
-dist
-package-lock.json
-test-results
-playwright-report
+dist/
+node_modules/
+src-tauri/target/
+src-tauri/gen/

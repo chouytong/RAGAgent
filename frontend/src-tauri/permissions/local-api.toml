@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-local-api"
+description = "Validated local backend requests, replayable run events and local document opening."
+commands.allow = ["api_request", "cancel_request", "run_events", "open_resource"]
