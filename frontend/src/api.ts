@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { request } from "./transport";
 export const SourceStatus = z.enum([
   "unknown",
   "active",
@@ -113,7 +114,7 @@ export async function api<T>(
   method = "POST",
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(path, {
+  const response = await request(path, {
     signal,
     method: body === undefined ? "GET" : method,
     headers:
@@ -125,9 +126,89 @@ export async function api<T>(
           ? body
           : JSON.stringify(body),
   });
-  if (!response.ok)
-    throw new Error(
-      `HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`,
-    );
-  return schema.parse(await response.json());
+  if (!response.ok) {
+    let code = "request_failed";
+    try {
+      const error = await response.json();
+      if (typeof error.error_code === "string") code = error.error_code;
+      else if (typeof error.detail === "string") code = error.detail;
+    } catch {
+      /* Do not display proxy HTML or unstructured exceptions. */
+    }
+    throw new Error(`HTTP ${response.status}: ${code}`);
+  }
+  return schema.parse(
+    response.status === 204 ? undefined : await response.json(),
+  );
 }
+export const ConversationMode = z.enum(["rag", "research"]);
+export type ConversationMode = z.infer<typeof ConversationMode>;
+export const Conversation = z.object({
+  id: z.string(),
+  title: z.string(),
+  mode: ConversationMode,
+  archived: z.boolean(),
+  metadata: z.record(z.string(), z.unknown()),
+  created_at: z.string(),
+  updated_at: z.string(),
+  active_run_id: z.string().nullable(),
+});
+export type Conversation = z.infer<typeof Conversation>;
+export const Message = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string(),
+  ordinal: z.number().int(),
+  run_id: z.string().nullable(),
+  status: z.enum([
+    "queued",
+    "running",
+    "completed",
+    "insufficient_evidence",
+    "failed",
+    "cancelled",
+  ]),
+  metadata: z.record(z.string(), z.unknown()),
+  created_at: z.string(),
+  updated_at: z.string(),
+  run: Run.nullable(),
+});
+export type Message = z.infer<typeof Message>;
+export const Turn = z.object({
+  conversation: Conversation,
+  user_message: Message,
+  assistant_message: Message,
+  run: Run,
+});
+export const Summary = z.object({
+  conversation_id: z.string(),
+  content: z.string(),
+  through_ordinal: z.number().int(),
+  version: z.number().int(),
+  source_message_ids: z.array(z.string()),
+  metadata: z.record(z.string(), z.unknown()),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type Summary = z.infer<typeof Summary>;
+export const MemoryKind = z.enum([
+  "goal",
+  "constraint",
+  "term",
+  "preference",
+  "task",
+]);
+export type MemoryKind = z.infer<typeof MemoryKind>;
+export const Memory = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  kind: MemoryKind,
+  key: z.string().nullable(),
+  content: z.string(),
+  filters: z.record(z.string(), z.unknown()).nullable(),
+  metadata: z.record(z.string(), z.unknown()),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type Memory = z.infer<typeof Memory>;

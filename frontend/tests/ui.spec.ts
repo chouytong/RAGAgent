@@ -1,51 +1,21 @@
-import { expect, test } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
+import { completed, done, evidence, run, setupChat } from "./chat-fixtures";
+const test = base.extend<{ chat: Awaited<ReturnType<typeof setupChat>> }>({
+  chat: [
+    async ({ page }, use) => {
+      await use(await setupChat(page));
+    },
+    { auto: true },
+  ],
+});
 import { createServer } from "node:http";
 
-// These browser tests use explicit MOCK HTTP/SSE fixtures. They exercise the
-// production UI and wire contracts, not real retrieval or model verification.
-const run = {
-  id: "c82d3363-dcbb-45df-b81e-8bfaed0992c7",
-  kind: "rag",
-  status: "queued",
-  trace_id: "test-trace",
-  error_code: null,
-  result: null,
-};
-const evidence = {
-  evidence_id: "d5871625-f202-46f6-a2a2-cfba7d9d6994",
-  paper: { paper_id: "paper-1", title: "MOCK evidence paper" },
-  chunk_id: "chunk-1",
-  section_path: "Results",
-  page_start: 7,
-  page_end: 8,
-  quote: "Exact source text from the MOCK fixture.",
-};
-const completed = {
-  ...run,
-  status: "completed",
-  result: {
-    answer: `MOCK supported statement. [E:${evidence.evidence_id}]`,
-    reranked_evidence: [evidence],
-  },
-};
-const done = (result: object) =>
-  `event: done\ndata: ${JSON.stringify(result)}\n\n`;
-
-test.beforeEach(async ({ page }) => {
-  await page.route("**/api/papers?*", (route) => route.fulfill({ json: [] }));
-});
-
+// The original single-task tests now exercise the same filters, citation,
+// failure and SSE assertions through formal persistent Conversation turns.
 test("typing multiword and OR filters preserves the actual request", async ({
   page,
+  chat,
 }) => {
-  let submitted: Record<string, unknown> | undefined;
-  await page.route("**/api/rag/query", async (route) => {
-    submitted = route.request().postDataJSON();
-    await route.fulfill({ status: 202, json: run });
-  });
-  await page.route("**/api/runs/*/events", (route) =>
-    route.fulfill({ contentType: "text/event-stream", body: done(completed) }),
-  );
   await page.goto("/");
   await page.getByRole("button", { name: "RAG", exact: true }).click();
   await page.getByText("文献过滤条件（同字段 OR，不同字段 AND）").click();
@@ -62,9 +32,9 @@ test("typing multiword and OR filters preserves the actual request", async ({
     "Alice Smith;Bob Jones",
   );
   await page.getByLabel("研究问题").fill("Compare these MOCK papers");
-  await page.getByRole("button", { name: "开始", exact: true }).click();
+  await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect
-    .poll(() => submitted?.filters)
+    .poll(() => chat.sentBodies[0]?.filters)
     .toMatchObject({
       authors: ["Alice Smith", "Bob Jones"],
       venues: ["Nature Communications"],
@@ -93,6 +63,9 @@ test("knowledge pagination reaches paper 51 and returns to the first page", asyn
     return route.fulfill({ json: papers.slice(offset, offset + limit) });
   });
   await page.goto("/");
+  await page
+    .getByRole("button", { name: "Knowledge Base", exact: true })
+    .click();
   await expect(page.locator("tbody tr")).toHaveCount(50);
   await page.getByRole("button", { name: "下一页" }).click();
   await expect(
@@ -110,21 +83,22 @@ test("knowledge pagination reaches paper 51 and returns to the first page", asyn
 test("API failure is visible and allows another RAG submission", async ({
   page,
 }) => {
-  await page.route("**/api/rag/query", (route) =>
+  await page.route("**/api/conversations/*/messages", (route) =>
     route.fulfill({ status: 503, json: { error_code: "queue_unavailable" } }),
   );
   await page.goto("/");
   await page.getByRole("button", { name: "RAG", exact: true }).click();
   await page.getByLabel("研究问题").fill("MOCK question");
-  await page.getByRole("button", { name: "开始", exact: true }).click();
+  await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("queue_unavailable");
   await expect(
-    page.getByRole("button", { name: "开始", exact: true }),
+    page.getByRole("button", { name: "发送", exact: true }),
   ).toBeEnabled();
 });
 
 test("real EventSource reconnects with its cursor, completes and restores citations", async ({
   page,
+  chat,
 }) => {
   let connections = 0;
   let resumedCursor: string | undefined;
@@ -147,6 +121,7 @@ test("real EventSource reconnects with its cursor, completes and restores citati
     } else {
       const cursor = request.headers["last-event-id"];
       resumedCursor = typeof cursor === "string" ? cursor : undefined;
+      chat.completeRun(run.id, completed);
       response.end(done(completed));
     }
   });
@@ -154,13 +129,11 @@ test("real EventSource reconnects with its cursor, completes and restores citati
   const address = server.address();
   if (!address || typeof address === "string")
     throw new Error("MOCK SSE server unavailable");
-  await page.route("**/api/rag/query", (route) =>
-    route.fulfill({ status: 202, json: run }),
-  );
+
   await page.route(`**/api/runs/${run.id}`, (route) =>
     route.fulfill({ json: completed }),
   );
-  await page.route("**/api/runs/*/events", (route) =>
+  await page.route("**/api/runs/*/events?*", (route) =>
     route.fulfill({
       status: 307,
       headers: { Location: `http://127.0.0.1:${address.port}/events` },
@@ -170,7 +143,7 @@ test("real EventSource reconnects with its cursor, completes and restores citati
     await page.goto("/");
     await page.getByRole("button", { name: "RAG", exact: true }).click();
     await page.getByLabel("研究问题").fill("MOCK cited question");
-    await page.getByRole("button", { name: "开始", exact: true }).click();
+    await page.getByRole("button", { name: "发送", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("正在重连");
     await expect(
       page.getByRole("heading", { name: "已验证结果" }),
@@ -202,6 +175,7 @@ test("real EventSource reconnects with its cursor, completes and restores citati
 
 test("citations preserve version and separate auxiliary source text and limitations", async ({
   page,
+  chat,
 }) => {
   const tableEvidence = {
     ...evidence,
@@ -244,19 +218,17 @@ test("citations preserve version and separate auxiliary source text and limitati
       limitations: ["MOCK unverified causal interpretation"],
     },
   };
-  await page.route("**/api/rag/query", (route) =>
-    route.fulfill({ status: 202, json: run }),
-  );
-  await page.route("**/api/runs/*/events", (route) =>
+
+  await page.route("**/api/runs/*/events?*", (route) =>
     route.fulfill({
       contentType: "text/event-stream",
-      body: done(tableCompleted),
+      body: done(chat.completeRun(run.id, tableCompleted)),
     }),
   );
   await page.goto("/");
   await page.getByRole("button", { name: "RAG", exact: true }).click();
   await page.getByLabel("研究问题").fill("MOCK table question");
-  await page.getByRole("button", { name: "开始", exact: true }).click();
+  await page.getByRole("button", { name: "发送", exact: true }).click();
   const limitations = page.getByRole("complementary", {
     name: "未验证项与局限",
   });
@@ -293,32 +265,33 @@ test("citations preserve version and separate auxiliary source text and limitati
 
 test("research limitations are visible outside the reviewed report", async ({
   page,
+  chat,
 }) => {
   const researchRun = { ...run, kind: "research" };
-  await page.route("**/api/research", (route) =>
-    route.fulfill({ status: 202, json: researchRun }),
-  );
-  await page.route("**/api/runs/*/events", (route) =>
+
+  await page.route("**/api/runs/*/events?*", (route) =>
     route.fulfill({
       contentType: "text/event-stream",
-      body: done({
-        ...researchRun,
-        status: "completed",
-        result: {
-          draft_report: "MOCK reviewed research report",
-          evidence_pool: [],
-          analysis_results: [
-            { limitations: ["MOCK unverified external validity"] },
-            { limitations: ["MOCK unverified external validity"] },
-          ],
-        },
-      }),
+      body: done(
+        chat.completeRun(run.id, {
+          ...researchRun,
+          status: "completed",
+          result: {
+            draft_report: "MOCK reviewed research report",
+            evidence_pool: [],
+            analysis_results: [
+              { limitations: ["MOCK unverified external validity"] },
+              { limitations: ["MOCK unverified external validity"] },
+            ],
+          },
+        }),
+      ),
     }),
   );
   await page.goto("/");
   await page.getByRole("button", { name: "Research", exact: true }).click();
   await page.getByLabel("研究问题").fill("MOCK research question");
-  await page.getByRole("button", { name: "开始", exact: true }).click();
+  await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.locator(".report")).toHaveText(
     "MOCK reviewed research report",
   );
@@ -359,6 +332,9 @@ test("knowledge source status can be manually saved without changing ingestion s
     return route.fulfill({ json: paper });
   });
   await page.goto("/");
+  await page
+    .getByRole("button", { name: "Knowledge Base", exact: true })
+    .click();
   const row = page.locator("tbody tr");
   await expect(row).toContainText("来源状态未核验");
   await expect(row).toContainText("冻结版本：v2");
@@ -426,7 +402,9 @@ test("provider tests require an explicitly saved mapping", async ({ page }) => {
     supervisor.getByRole("button", { name: /连接测试/ }),
   ).toBeEnabled();
   await supervisor.getByRole("button", { name: /连接测试/ }).click();
-  await expect(page.getByRole("status")).toContainText("MOCK-new-model");
+  await expect(page.locator("section").getByRole("status")).toContainText(
+    "MOCK-new-model",
+  );
   expect(tests).toBe(1);
 });
 
@@ -440,7 +418,7 @@ test("evaluation prevents duplicate dispatch and displays terminal artifacts", a
     await new Promise((resolve) => setTimeout(resolve, 150));
     await route.fulfill({ status: 202, json: evaluation });
   });
-  await page.route("**/api/runs/*/events", (route) =>
+  await page.route("**/api/runs/*/events?*", (route) =>
     route.fulfill({
       contentType: "text/event-stream",
       body: done({

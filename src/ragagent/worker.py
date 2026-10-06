@@ -8,10 +8,11 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 from redis import Redis
 from rq import Queue, Worker
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from ragagent.conversations.service import context_config, prepare_context
 from ragagent.db.models import Author, ExecutionEvent, Paper, PaperAuthor, Run, new_id
 from ragagent.db.session import session_factory
 from ragagent.errors import ApplicationError
@@ -22,7 +23,14 @@ from ragagent.ingestion.arxiv import arxiv_identity, download_arxiv
 from ragagent.ingestion.chunker import StructureChunker
 from ragagent.ingestion.parser import DoclingParser
 from ragagent.ingestion.service import ingest
-from ragagent.jobs import claim_run, ensure_running, fail_run, finish_run
+from ragagent.jobs import (
+    TERMINAL_STATUSES,
+    claim_run,
+    ensure_running,
+    fail_run,
+    finish_run,
+    locked_run,
+)
 from ragagent.observability import configure_logging
 from ragagent.providers.chat import Usage, usage_record
 from ragagent.retrieval.service import HybridRetriever
@@ -37,13 +45,34 @@ logger = logging.getLogger("ragagent.worker")
 def persist_usage(session: Session, run: Run, tracked: dict[str, Usage]) -> None:
     """Checkpoint charges without committing the caller's indexing transaction."""
     with Session(session.get_bind(), expire_on_commit=False) as checkpoint:
-        current = checkpoint.get(Run, run.id)
+        identity = inspect(run).identity
+        run_id = str(identity[0]) if identity else run.id
+        current = locked_run(checkpoint, run_id)
         if current is None:
+            raise ApplicationError("run_no_longer_active")
+        records = {name: usage_record(usage) for name, usage in tracked.items()}
+        if current.status in TERMINAL_STATUSES:
+            # A response may arrive after cancellation. Enrich only a call already
+            # checkpointed before revocation; a new begin_call must fail before dispatch.
+            previous = (current.result or {}).get("usage", {})
+            can_complete = current.status in {"cancelled", "failed"} and all(
+                record["calls"] == previous.get(name, {}).get("calls", 0)
+                and record["in_flight_calls"] <= previous.get(name, {}).get("in_flight_calls", 0)
+                and record["known_cost"] >= previous.get(name, {}).get("known_cost", 0.0)
+                for name, record in records.items()
+            )
+            if can_complete:
+                current.result = {
+                    **(current.result or {}),
+                    "usage": records,
+                    "usage_scope": "current_attempt",
+                }
+                checkpoint.commit()
             raise ApplicationError("run_no_longer_active")
         ensure_running(checkpoint, current)
         current.result = {
             **(current.result or {}),
-            "usage": {name: usage_record(usage) for name, usage in tracked.items()},
+            "usage": records,
             "usage_scope": "current_attempt",
         }
         checkpoint.commit()
@@ -156,6 +185,7 @@ async def execute_async(run_id: str) -> None:
         run = claim_run(session, run_id)
         if run is None:
             return
+        trace_id = run.trace_id
         paper: Paper | None = None
         tracked: dict[str, Usage] = {}
         try:
@@ -216,6 +246,14 @@ async def execute_async(run_id: str) -> None:
                     settings.evidence_top_k,
                     settings.rrf_k,
                 )
+                request = dict(run.request)
+                conversation_metadata = None
+                if run.conversation_id is not None:
+                    resolved = await prepare_context(session, run, agents["retriever"], settings)
+                    question_field = "query" if run.kind == "rag" else "research_question"
+                    request[question_field] = resolved.contextualized_query
+                    request["filters"] = resolved.filters.model_dump(mode="json")
+                    conversation_metadata = resolved.metadata
                 if run.kind == "rag":
                     graph = build_rag(
                         search,
@@ -228,7 +266,7 @@ async def execute_async(run_id: str) -> None:
                         max_evidence_records=settings.rag_evidence_budget,
                     )
                     state = await graph_events(
-                        graph, RAGState(**run.request, trace_id=run.trace_id), session, run, 100
+                        graph, RAGState(**request, trace_id=run.trace_id), session, run, 100
                     )
                     run.result, run.status = state.model_dump(mode="json"), state.status
                 else:
@@ -247,7 +285,7 @@ async def execute_async(run_id: str) -> None:
                     research = await graph_events(
                         research_graph,
                         MultiAgentState(
-                            **run.request,
+                            **request,
                             trace_id=run.trace_id,
                             trace_metadata={"run_id": run.id, "workflow": "research-v1"},
                         ),
@@ -256,9 +294,15 @@ async def execute_async(run_id: str) -> None:
                         300,
                     )
                     run.result, run.status = research.model_dump(mode="json"), research.status
+                if conversation_metadata is not None:
+                    run.result["conversation_context"] = conversation_metadata
                 run.result["usage"] = {name: usage_record(usage) for name, usage in tracked.items()}
                 run.result["usage_scope"] = "current_attempt"
             elif run.kind.startswith("eval_"):
+                from ragagent.evaluation.conversation_schema import (
+                    ConversationEvaluationDataset,
+                    validate_conversation_references,
+                )
                 from ragagent.evaluation.generation import evaluate_generation
                 from ragagent.evaluation.retrieval import evaluate_retrieval
                 from ragagent.evaluation.schema import EvaluationDataset
@@ -266,8 +310,14 @@ async def execute_async(run_id: str) -> None:
                 from ragagent.providers.chat import LiteLLMProvider
                 from ragagent.providers.config import load_config
 
-                dataset = EvaluationDataset.model_validate(run.request["dataset"])
-                validate_references(dataset, session)
+                if run.kind == "eval_conversation":
+                    conversation_dataset = ConversationEvaluationDataset.model_validate(
+                        run.request["dataset"]
+                    )
+                    validate_conversation_references(conversation_dataset, session)
+                else:
+                    dataset = EvaluationDataset.model_validate(run.request["dataset"])
+                    validate_references(dataset, session)
                 embedder = make_embedder(settings)
                 track_usage(session, run, tracked, "embedding", embedder)
                 search = HybridRetriever(
@@ -298,7 +348,7 @@ async def execute_async(run_id: str) -> None:
                         resume_directory=resume_directory,
                         resume_usage=resume_usage,
                     )
-                elif run.kind in {"eval_rag", "eval_multi_agent"}:
+                elif run.kind in {"eval_rag", "eval_multi_agent", "eval_conversation"}:
                     agents = make_agents(settings)
                     for name, adapter in agents.items():
                         track_usage(session, run, tracked, name, adapter)
@@ -307,17 +357,32 @@ async def execute_async(run_id: str) -> None:
                         settings.provider_timeout,
                     )
                     track_usage(session, run, tracked, "judge", judge)
-                    run.result = await evaluate_generation(
-                        dataset,
-                        search,
-                        agents,
-                        judge,
-                        settings,
-                        directory,
-                        multi_agent=run.kind == "eval_multi_agent",
-                        resume_directory=resume_directory,
-                        resume_usage=resume_usage,
-                    )
+                    if run.kind == "eval_conversation":
+                        from ragagent.evaluation.conversation import evaluate_conversation
+
+                        run.result = await evaluate_conversation(
+                            conversation_dataset,
+                            search,
+                            agents,
+                            judge,
+                            settings,
+                            directory,
+                            context_config=context_config(settings),
+                            resume_directory=resume_directory,
+                            resume_usage=resume_usage,
+                        )
+                    else:
+                        run.result = await evaluate_generation(
+                            dataset,
+                            search,
+                            agents,
+                            judge,
+                            settings,
+                            directory,
+                            multi_agent=run.kind == "eval_multi_agent",
+                            resume_directory=resume_directory,
+                            resume_usage=resume_usage,
+                        )
                 else:
                     raise ValueError("unknown_evaluation_kind")
                 run.status = "completed" if run.result.get("status") == "completed" else "failed"
@@ -342,7 +407,7 @@ async def execute_async(run_id: str) -> None:
                     if usage_exc.code != "run_no_longer_active":
                         raise
             fail_run(session, run_id, code)
-            logger.error("job_failed", extra={"trace_id": run.trace_id, "error_code": code})
+            logger.error("job_failed", extra={"trace_id": trace_id, "error_code": code})
             # Re-raise only a safe error so RQ persistence/logging cannot leak exception messages.
             raise ApplicationError(code) from None
         finally:

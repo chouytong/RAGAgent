@@ -117,7 +117,7 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
         failure = alembic("downgrade", "0002", succeeds=False)
         assert "source_identity_downgrade_requires_unique_checksums" in failure
         with probe.begin() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
             connection.execute(
                 text("UPDATE papers SET sha256=:sha WHERE id='legacy-pinned'"),
                 {"sha": "c" * 64},
@@ -147,7 +147,7 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
         failure = alembic("downgrade", "0001", succeeds=False)
         assert "section_identity_downgrade_requires_unique_display_paths" in failure
         with probe.begin() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
             assert connection.scalar(text("SELECT count(*) FROM job_dispatches")) == 2
             assert connection.scalar(text("SELECT count(*) FROM sections")) == 3
             connection.execute(text("DELETE FROM sections WHERE id='new-occurrence'"))

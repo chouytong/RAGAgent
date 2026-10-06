@@ -4,11 +4,12 @@ import uuid
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from rq import Queue, Worker
 from sqlalchemy import text
 
-from ragagent.api import evaluations, papers, providers, runs
+from ragagent.api import conversations, evaluations, papers, providers, runs
 from ragagent.api.dependencies import get_search
 from ragagent.api.dispatcher import dispatcher_lifespan
 from ragagent.api.papers import DB
@@ -25,6 +26,7 @@ app.include_router(papers.router)
 app.include_router(runs.router)
 app.include_router(providers.router)
 app.include_router(evaluations.router)
+app.include_router(conversations.router)
 logger = logging.getLogger("ragagent.api")
 
 
@@ -63,6 +65,18 @@ async def safe_error(request: Request, exc: ApplicationError) -> JSONResponse:
     return JSONResponse(
         status_code=503,
         content={"error_code": exc.code, "request_id": getattr(request.state, "request_id", None)},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # Pydantic's default response echoes rejected input, which can contain credentials.
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error_code": "invalid_request",
+            "request_id": getattr(request.state, "request_id", None),
+        },
     )
 
 

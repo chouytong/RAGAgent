@@ -1,0 +1,96 @@
+{
+  "dataset_id": "replace-with-real-conversation-dataset",
+  "label_source": "unannotated",
+  "description": "A human must fill corpus IDs, answers, referents, adversarial statements and annotation provenance before running.",
+  "cases": [
+    {
+      "id": "q001",
+      "mode": "rag",
+      "dimensions": [
+        "context_resolution",
+        "evidence_grounding",
+        "memory_isolation",
+        "long_summary"
+      ],
+      "seed_messages": [],
+      "memories": [],
+      "turns": [
+        {
+          "id": "t1",
+          "query": "REPLACE with the first real question",
+          "question_type": "fact",
+          "filters": {},
+          "relevant_chunk_ids": [],
+          "relevant_paper_ids": [],
+          "expected_answer": "",
+          "required_aspects": [],
+          "expected_context_terms": [],
+          "forbidden_answer_fragments": [],
+          "expects_summary": false,
+          "annotated_by": null,
+          "annotated_at": null
+        },
+        {
+          "id": "t2",
+          "query": "REPLACE with a real follow-up question",
+          "question_type": "fact",
+          "filters": {},
+          "relevant_chunk_ids": [],
+          "relevant_paper_ids": [],
+          "expected_answer": "",
+          "required_aspects": [],
+          "expected_context_terms": [],
+          "forbidden_answer_fragments": [],
+          "expects_summary": true,
+          "annotated_by": null,
+          "annotated_at": null
+        }
+      ]
+    },
+    {
+      "id": "compare-q002",
+      "mode": "research",
+      "dimensions": [
+        "context_resolution",
+        "evidence_grounding",
+        "memory_isolation"
+      ],
+      "seed_messages": [
+        {
+          "id": "candidate-list",
+          "ordinal": 0,
+          "role": "user",
+          "status": "completed",
+          "content": "REPLACE with two exact paper titles and an intentionally false historical sample-size assertion."
+        }
+      ],
+      "memories": [],
+      "turns": [
+        {
+          "id": "compare-t1",
+          "query": "Which one has the largest sample size?",
+          "question_type": "comparison",
+          "filters": {},
+          "relevant_chunk_ids": [],
+          "relevant_paper_ids": [],
+          "expected_answer": "",
+          "required_aspects": [
+            "sample_size"
+          ],
+          "expected_context_terms": [
+            "REPLACE exact first paper title",
+            "REPLACE exact second paper title",
+            "largest"
+          ],
+          "forbidden_answer_fragments": [
+            "REPLACE the false historical number"
+          ],
+          "expects_summary": false,
+          "annotated_by": null,
+          "annotated_at": null
+        }
+      ],
+      "notes": "Label both candidate entities and the comparison operator. Gold quotes must cover both papers. Never choose the winner from unverified conversation numbers."
+    }
+  ]
+}

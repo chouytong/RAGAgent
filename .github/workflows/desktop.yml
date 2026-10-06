@@ -1,0 +1,94 @@
+name: Desktop
+on: [push, pull_request]
+jobs:
+  linux-desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg17
+        env:
+          POSTGRES_USER: ragagent
+          POSTGRES_PASSWORD: ragagent
+          POSTGRES_DB: ragagent
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U ragagent -d ragagent"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7.4.2-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://ragagent:ragagent@127.0.0.1:5432/ragagent
+      REDIS_URL: redis://127.0.0.1:6379/14
+      DATA_DIR: /tmp/ragagent-desktop-data
+      CARGO_BUILD_JOBS: '2'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.19'
+          python-version: '3.11'
+      - name: Install Linux desktop dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev xvfb xauth dbus-x11
+      - run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            frontend/src-tauri/target
+          key: ${{ runner.os }}-desktop-${{ hashFiles('frontend/src-tauri/Cargo.lock') }}
+      - run: npm ci
+      - run: npm run test:transport
+      - run: cd src-tauri && cargo fmt --check
+      - run: npm run desktop:check
+      - run: npm run desktop:test
+      - run: cd src-tauri && cargo clippy --locked -- -D warnings
+      - run: npm run desktop:build
+      - name: Start the actual local backend
+        working-directory: .
+        run: |
+          uv sync --locked
+          uv run alembic upgrade head
+          mkdir -p "$DATA_DIR"
+          uv run python -m ragagent.worker >"$RUNNER_TEMP/desktop-worker.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/desktop-worker.pid"
+          uv run uvicorn ragagent.api.app:app --host 127.0.0.1 --port 8000 >"$RUNNER_TEMP/desktop-api.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/desktop-api.pid"
+          timeout 60 python - <<'PY'
+          import time
+          import urllib.request
+          while True:
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:8000/api/ready', timeout=2) as response:
+                      if response.status == 200:
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          PY
+      - name: Verify native loopback connectivity
+        run: src-tauri/target/release/scientific-ragagent-desktop --check-backend
+      - name: Start GUI and verify rendered frontend
+        run: timeout 45 xvfb-run -a dbus-run-session -- src-tauri/target/release/scientific-ragagent-desktop --smoke-test
+      - if: always()
+        name: Stop isolated test processes
+        working-directory: .
+        run: |
+          for name in desktop-api desktop-worker; do
+            if [ -f "$RUNNER_TEMP/$name.pid" ]; then
+              kill "$(cat "$RUNNER_TEMP/$name.pid")" 2>/dev/null || true
+            fi
+          done

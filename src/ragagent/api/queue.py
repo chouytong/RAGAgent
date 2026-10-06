@@ -2,6 +2,7 @@ from typing import Protocol
 
 from redis import Redis
 from rq import Queue
+from rq.command import send_stop_job_command
 from rq.exceptions import DuplicateJobError, NoSuchJobError
 from rq.job import Callback, Job
 
@@ -29,6 +30,17 @@ class RQQueue:
 
     def submit(self, run_id: str) -> None:
         self.submit_with_timeout(run_id, JOB_TIMEOUT_SECONDS)
+
+    def cancel(self, run_id: str) -> None:
+        connection = self.connection()
+        try:
+            job = Job.fetch(run_id, connection=connection)
+            if job.get_status(refresh=True).value == "started":
+                send_stop_job_command(connection, run_id)
+            else:
+                job.cancel()
+        except NoSuchJobError:
+            return
 
     def submit_with_timeout(self, run_id: str, timeout: int) -> None:
         try:

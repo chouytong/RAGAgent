@@ -531,3 +531,187 @@ record above describes the baseline history, not this repair pass.
 - `tests/unit/test_reranker.py`
 - `tests/unit/test_retrieval.py`
 - `tests/unit/test_runtime_configuration.py`
+
+
+## Product upgrade: local conversations and desktop (2026-10-06)
+
+Added formal Conversation/Message/Summary/Memory persistence, Alembic 0004,
+idempotent conversation APIs, atomic worker/message terminal transitions, safe
+cancellation and late-response usage accounting. Contextualization remains above
+the separate evidence-first RAG/Research graphs: bounded recent context, lossy
+local rolling extracts, explicit intersected filter memories and source-linked
+query rewrites never become scientific Evidence.
+
+The shared React UI now supports durable chats, Markdown/citations, folding
+research details, memory management, paginated history, restart/SSE recovery and
+retry/cancel. Tauri adds a scoped fixed-loopback Rust request/SSE/file bridge,
+with bounded cancellation bookkeeping and native health/offline handling. The
+new conversation evaluator executes actual context/graphs/retrieval/verification
+and a separate judge; four dimensions and partial/resume accounting are exposed.
+
+Final review repaired visible/submitted filter mismatch, failed draft release,
+late desktop cancel capacity leakage, impossible minimum input budgets, historical
+comparison-winner narrowing, credential-shaped values in context filters and
+conversation evaluation payloads, and rewriting over an independently checkpointed
+usage ledger. Added regressions retain the existing assertions.
+
+### Actual validation
+
+- `.venv/bin/ruff format --check .`, `ruff check .`, `mypy src`: passed.
+- Full `pytest -q` with real PostgreSQL/pgvector and Redis/RQ: 461 passed
+  (360 unit + 101 integration), 23.90 seconds; two upstream RQ fork deprecation
+  warnings in deliberate real child-exit/stop tests. No skipped integration tests.
+- `npm ci`, `npm run lint`, `check`, `build`: passed. System Chromium Playwright:
+  26 passed (original 9 retained + 17 chat scenarios); transport tests: 8 passed.
+- Cargo fmt/check/clippy with warnings denied, locked dependencies, Rust tests:
+  7 passed; `npm run desktop:build`: release native binary built.
+- Actual native `--check-backend`: local_backend_ready. Actual Xvfb/DBus GUI
+  `--smoke-test`: desktop=true, root/loaded=true, backend-status ready, exit 0.
+  Debian WebKit dependencies were extracted and relocated only in a temporary
+  sysroot; system files and WebKit sandbox were not altered.
+- Docker frontend/backend image builds and Compose configuration/migration/ready
+  checks: passed. `python scripts/smoke.py` verifies real missing-key RQ failure,
+  proxied terminal SSE, persisted conversation/message association, idempotency
+  and explicit memory/history deletion. No paid inference or downloaded weights.
+- A temporary 32 GB VFS validation environment filled during repeated image
+  builds/container copies; test build cache/outdated test images were reclaimed
+  and affected build checks rerun. No repository source or user data was deleted.
+
+### Practical limitations
+
+Scripted providers and synthetic corpus fixtures test the production mechanics,
+not real-model scientific accuracy. Human gold datasets, genuine model inference
+and measured quality/cost gains remain unverified. Windows/macOS packaging/signing,
+physical operating-system IME behavior and OS PDF viewer interaction were not
+tested. Context budgeting is a conservative byte estimate for rewrite input,
+not an actual tokenizer reading or currency cap. Summary is lossy; deletion does
+not erase backups or independent desktop PDF cache copies. Remote inference still
+sends necessary text to the configured provider. The JS bundle has a size advisory.
+
+The requested 13-part handover is in [product-upgrade-report.md](product-upgrade-report.md).
+
+Published review branch: `feature/desktop-conversations`, stacked on
+`phase-6-evaluation-deployment`. Remote backend commit
+`0a4a073cbf671850986394cd72b82ced626183a5` and UI/desktop commit
+`e0042c1c43c0b1f66f89a1aed5d584e1231a211a` have Git tree hashes matching the
+corresponding fully tested local commits. The actual-model, real-paper native
+multi-turn/restart/Research acceptance scenario remains unverified.
+
+GitHub's backend, frontend and Compose jobs also passed on the published head.
+Publication caught a Desktop workflow configuration error before any job started:
+`runner.temp` is unavailable in job-level `env`. Its test-only `DATA_DIR` now uses
+an isolated Linux runner's `/tmp/ragagent-desktop-data`; application code and
+the verified native build are unaffected.
+Actionlint 1.7.7 reproduced the original context error and passed both workflows
+after this change, without further YAML/expression findings.
+
+### Changed files
+
+- `.dockerignore`
+- `.env.example`
+- `.github/workflows/desktop.yml`
+- `README.md`
+- `docs/adr/0007-local-conversations-and-desktop.md`
+- `docs/adr/README.md`
+- `docs/api.md`
+- `docs/architecture.md`
+- `docs/conversation-memory.md`
+- `docs/data-model.md`
+- `docs/deployment.md`
+- `docs/evaluation.md`
+- `docs/product-upgrade-report.md`
+- `docs/stage-log.md`
+- `evals/conversation/README.md`
+- `evals/conversation/annotation-template.json`
+- `evals/conversation/demo.json`
+- `evals/conversation/schema.json`
+- `frontend/.prettierignore`
+- `frontend/package-lock.json`
+- `frontend/package.json`
+- `frontend/src-tauri/.gitignore`
+- `frontend/src-tauri/Cargo.lock`
+- `frontend/src-tauri/Cargo.toml`
+- `frontend/src-tauri/build.rs`
+- `frontend/src-tauri/capabilities/main.json`
+- `frontend/src-tauri/icon.svg`
+- `frontend/src-tauri/icons/128x128.png`
+- `frontend/src-tauri/icons/128x128@2x.png`
+- `frontend/src-tauri/icons/32x32.png`
+- `frontend/src-tauri/icons/64x64.png`
+- `frontend/src-tauri/icons/Square107x107Logo.png`
+- `frontend/src-tauri/icons/Square142x142Logo.png`
+- `frontend/src-tauri/icons/Square150x150Logo.png`
+- `frontend/src-tauri/icons/Square284x284Logo.png`
+- `frontend/src-tauri/icons/Square30x30Logo.png`
+- `frontend/src-tauri/icons/Square310x310Logo.png`
+- `frontend/src-tauri/icons/Square44x44Logo.png`
+- `frontend/src-tauri/icons/Square71x71Logo.png`
+- `frontend/src-tauri/icons/Square89x89Logo.png`
+- `frontend/src-tauri/icons/StoreLogo.png`
+- `frontend/src-tauri/icons/icon.icns`
+- `frontend/src-tauri/icons/icon.ico`
+- `frontend/src-tauri/icons/icon.png`
+- `frontend/src-tauri/permissions/local-api.toml`
+- `frontend/src-tauri/rust-toolchain.toml`
+- `frontend/src-tauri/src/bridge.rs`
+- `frontend/src-tauri/src/main.rs`
+- `frontend/src-tauri/tauri.conf.json`
+- `frontend/src/Evaluation.tsx`
+- `frontend/src/Knowledge.tsx`
+- `frontend/src/Memory.tsx`
+- `frontend/src/Tasks.tsx`
+- `frontend/src/api.ts`
+- `frontend/src/components.tsx`
+- `frontend/src/main.tsx`
+- `frontend/src/style.css`
+- `frontend/src/transport.ts`
+- `frontend/tests/chat-fixtures.ts`
+- `frontend/tests/chat.spec.ts`
+- `frontend/tests/transport/transport.test.ts`
+- `frontend/tests/ui.spec.ts`
+- `frontend/vite.config.ts`
+- `migrations/versions/0004_conversations_and_memory.py`
+- `scripts/smoke.py`
+- `src/ragagent/api/app.py`
+- `src/ragagent/api/conversations.py`
+- `src/ragagent/api/evaluations.py`
+- `src/ragagent/api/queue.py`
+- `src/ragagent/api/runs.py`
+- `src/ragagent/conversations/context.py`
+- `src/ragagent/conversations/service.py`
+- `src/ragagent/db/models.py`
+- `src/ragagent/domain/conversation.py`
+- `src/ragagent/domain/conversation_context.py`
+- `src/ragagent/evaluation/conversation.py`
+- `src/ragagent/evaluation/conversation_schema.py`
+- `src/ragagent/jobs.py`
+- `src/ragagent/settings.py`
+- `src/ragagent/worker.py`
+- `tests/conftest.py`
+- `tests/integration/test_conversation_evaluation.py`
+- `tests/integration/test_conversation_migration.py`
+- `tests/integration/test_conversation_worker.py`
+- `tests/integration/test_conversations.py`
+- `tests/integration/test_migrations.py`
+- `tests/unit/test_conversation_context.py`
+- `tests/unit/test_conversation_contracts.py`
+- `tests/unit/test_conversation_evaluation.py`
+
+## Bilingual README (2026-10-06)
+
+Retained `README.md` as the English edition and added a complete Simplified Chinese
+edition in `README.zh-CN.md`, with reciprocal language links at the top. Both
+editions cover the same eight sections, commands, API examples, architecture and
+scientific/data-handling limitations. Code examples and Mermaid diagrams remain
+identical across editions.
+
+Changed files: `README.md`, `README.zh-CN.md`, `docs/stage-log.md`.
+Targeted checks passed: eight matching sections, seven identical fenced code
+blocks, preserved original documentation links, valid relative link targets and
+reciprocal language navigation; `git diff --check` passed. This is a documentation
+change, so application tests were not rerun locally.
+
+The preceding implementation head `670cc5f0ffdc873b1cfc2e91828e15f7d0a5896d`
+also completed GitHub's PR-triggered CI and Desktop workflows successfully
+(runs `37417995238` and `37417995251`). This does not change the recorded gaps in
+real-paper/actual-model scientific acceptance or platform packaging validation.

@@ -1,20 +1,31 @@
 # Scientific RAGAgent
 
-A local, evidence-grounded scientific literature knowledge base, RAG workflow and
-Supervisor research system. MIT licensed; paper and model-weight licenses remain
+**English | [简体中文](README.zh-CN.md)**
+
+A local scientific literature assistant with persistent RAG/Research chats,
+inspectable conversation memory and a Tauri desktop entry. It retains the existing
+evidence-grounded knowledge base and Supervisor workflows. MIT licensed; paper and model-weight licenses remain
 independent. No langgraph-supervisor dependency. No fabricated benchmark claims.
 
-The full implementation is on the `phase-6-evaluation-deployment` review branch
-until staged PRs are reviewed. PRs are intentionally not auto-merged.
+The conversation/desktop upgrade is published on
+[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations),
+stacked on the existing `phase-6-evaluation-deployment` RAG/Research baseline.
+Use this review branch until the PRs are reviewed and merged.
 
 ```bash
-git clone --branch phase-6-evaluation-deployment https://github.com/chouytong/RAGAgent.git
+git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
+# First checkout only; preserve an existing runtime .env.
 cp .env.example .env
 docker compose up --build
 ```
 
-Open [research assistant](http://localhost:8080) and [API docs](http://localhost:8000/docs).
+Open the [Web fallback](http://localhost:8080) and [API docs](http://localhost:8000/docs).
+For an independent application window, start the local backend with Compose and
+run `npm --prefix frontend ci` followed by `npm --prefix frontend run desktop:dev`.
+The desktop shell connects only to `http://127.0.0.1:8000`; it does not bundle or
+start Python, PostgreSQL or Redis. Rust and platform WebView prerequisites are
+listed in [deployment](docs/deployment.md#desktop-ui-with-local-backend).
 Requires Docker Compose v2, Git, recommended 8 GB RAM and 20 GB free disk.
 The system starts without API keys; inference requires configured chat providers
 or local models. Local parsing/embedding/reranker weights download on first use.
@@ -25,12 +36,20 @@ worker, without asserting model/provider inference readiness.
 
 ```mermaid
 flowchart LR
- React[React + TypeScript + SSE] --> API[FastAPI]
- API --> Jobs[Redis / RQ worker]
+ Desktop[Tauri window] --> React[React + TypeScript Chat UI]
+ Web[Web fallback] --> React
+ React --> Bridge[Desktop: scoped Rust bridge; fixed loopback]
+ Bridge --> API[FastAPI Conversation API + existing APIs]
+ React -->|Web: same-origin proxy| API
+ API --> Jobs[Durable dispatch → Redis / RQ worker]
+ Jobs --> Context[Bounded context + rolling summary + explicit memory]
+ Context --> Rewrite[Standalone query; context is not evidence]
  Jobs --> Parse[Docling + section-aware chunks]
  Parse --> DB[(PostgreSQL + pgvector + FTS)]
- Jobs --> RAG[Typed RAG StateGraph]
- Jobs --> MA[Supervisor StateGraph]
+ Rewrite --> RAG[Typed RAG StateGraph]
+ Rewrite --> MA[Supervisor StateGraph]
+ Jobs -->|Legacy standalone Run| RAG
+ Jobs -->|Legacy standalone Run| MA
  RAG --> Retrieval[Filters → dense + FTS → RRF → cross encoder]
  MA --> Retrieval
  Retrieval --> DB
@@ -45,6 +64,65 @@ flowchart LR
 Python 3.11+, Pydantic v2, SQLAlchemy 2, Alembic, current LangGraph, LiteLLM,
 Docling, PostgreSQL/pgvector, Redis/RQ; React/TypeScript/Vite; uv/npm locks,
 Docker Compose, pytest/Ruff/mypy and GitHub Actions.
+
+## Chats and local memory
+
+RAG Chat and Research Chat have separate conversation histories, automatic titles,
+rename/delete controls, ordered messages, Markdown/code blocks, citations and
+collapsible execution details. Research retains Supervisor Plan, agent trace,
+Reviewer Result and limitations. Reloading the Web UI or restarting the desktop
+reads conversations and messages from PostgreSQL; browser `localStorage` is not
+the conversation store. A URL fragment identifies the selected conversation.
+
+Each turn creates messages and an existing Run/durable dispatch intent together.
+The worker persists the released assistant answer with the terminal Run/event;
+SSE reconnects replay persisted execution events. Duplicate submissions use a
+client UUID; retry creates a new Run and keeps the previous failure visible.
+One conversation executes one turn at a time; different conversations remain
+independent. Cancellation revokes publication permission and makes a best-effort
+queue stop; an already dispatched provider call may still complete or incur cost.
+
+Follow-ups pass through a Context Builder: current question, bounded recent
+messages, a deterministic rolling extractive summary and explicitly added memories
+resolve pronouns/named candidates into a standalone question. The original and
+contextualized query are inspectable in execution details. Older excerpts may
+lose information; ambiguous references fail explicitly instead of guessing.
+`CONVERSATION_CONTEXT_TOKEN_BUDGET=8192` uses a conservative UTF-8 byte estimate
+for contextualization input, not a provider tokenizer or a total workflow budget.
+
+**Memory ≠ Evidence.** Messages, summaries and memories only guide intent and
+retrieval. Both independent graphs retrieve fresh source evidence and retain the
+existing evidence gate and claim/citation validation. A historical claim such as
+“Dataset A has 500 participants” cannot itself support the next scientific answer.
+Structured constraints with metadata filters intersect the current filters;
+conflicts fail explicitly. Natural-language preference text alone is not a hard
+SQL filter. Add, inspect or delete memory in the conversation's Memory panel;
+there is no automatic hidden user profile or external memory service.
+
+Clear Conversation Memory deletes summary/memory records and retains messages;
+retained history can create a new summary on a later turn. Clear Conversation
+deletes messages, associated Runs/events/dispatch records and memory while keeping
+the empty conversation. Delete Conversation removes those records and the
+conversation itself. Knowledge-base papers and unrelated evaluation artifacts
+are retained. See [conversation/memory lifecycle](docs/conversation-memory.md).
+
+## Local data and remote inference
+
+With the default local Compose services, PDFs/parse files, vector indexes,
+conversation history, summaries, structured memory and execution history remain
+in local PostgreSQL or named filesystem volumes. There is no cloud conversation
+database or SaaS memory storage. Backups, downloaded evaluation artifacts and the
+desktop's cached documents are separate copies and need separate deletion.
+
+Remote chat providers receive the necessary questions, conversation context for
+rewrite and retrieved excerpts for analysis/review; hosted embedding providers
+receive indexed text/search queries. Remote evaluation judges receive answer and
+evidence payloads. Local persistence therefore does **not** mean all data stays
+on the machine during inference. Configure local chat, embedding, reranker and
+parser resources to keep inference local; initial model downloads still require
+network unless cached. API keys stay in runtime environment/secrets. Recognizable
+credential patterns are rejected from conversation fields; avoid pasting secrets
+into free text, since pattern detection cannot identify every possible credential.
 
 ## Paper ingestion and knowledge base
 
@@ -135,6 +213,13 @@ sequenceDiagram
 ```
 
 ```bash
+curl -H 'Content-Type: application/json' -d '{"mode":"rag"}' \
+  http://localhost:8000/api/conversations
+# Replace CONVERSATION_ID and use a new client UUID for each new logical turn.
+curl -H 'Content-Type: application/json' \
+  -d '{"content":"Which datasets are used?","client_request_id":"00000000-0000-4000-8000-000000000001"}' \
+  http://localhost:8000/api/conversations/CONVERSATION_ID/messages
+# Existing single-run API clients remain supported:
 curl -H 'Content-Type: application/json' \
   -d '{"query":"How do the papers compare training methods?","filters":{"year_start":2023}}' \
   http://localhost:8000/api/rag/query
@@ -167,8 +252,11 @@ model caches, migrations, network requirements and troubleshooting.
 
 ## Evaluation and development
 
-Evaluation page accepts a benchmark dataset and runs retrieval ablation. APIs
-also run RAG and multi-agent evaluation. Each run writes results.json/results.md
+Evaluation page accepts a labeled dataset and runs retrieval ablation. APIs
+and the page also run RAG, multi-agent and conversational evaluation. Conversational evaluation
+uses the production Context Builder and independent graph pipelines to measure
+context resolution, evidence grounding, memory isolation and long-summary cases;
+it does not substitute memory for retrieval. Each run writes results.json/results.md
 with Git commit, dataset hash, timestamp, execution configuration and actual
 per-query metrics/latency. Each case checkpoints results; partial/failed terminal
 runs keep downloadable artifacts and can be resumed explicitly using
@@ -194,6 +282,10 @@ npm --prefix frontend run check
 npm --prefix frontend run build
 npm --prefix frontend exec -- playwright install chromium
 npm --prefix frontend run test:e2e
+npm --prefix frontend run test:transport
+npm --prefix frontend run desktop:check
+npm --prefix frontend run desktop:test
+npm --prefix frontend run desktop:build
 ```
 
 There are **no 100 human-labeled examples** in this repository. The unannotated
@@ -209,9 +301,10 @@ actual verification.
 ## Documentation and limits
 
 [Implementation/acceptance baseline](docs/MASTER_SPEC.md) ·
+[Product upgrade handover](docs/product-upgrade-report.md) ·
 [Repair decisions](docs/adr/README.md) ·
 [Reference/license review](docs/reference-review.md) · [Architecture](docs/architecture.md) ·
-[Data model](docs/data-model.md) · [Retrieval](docs/retrieval.md) ·
+[Data model](docs/data-model.md) · [Conversation and memory](docs/conversation-memory.md) · [Retrieval](docs/retrieval.md) ·
 [Agents](docs/agents.md) · [API](docs/api.md) · [Deployment](docs/deployment.md) ·
 [Contributor rules](AGENTS.md).
 
@@ -223,6 +316,10 @@ capabilities, latency and model cost vary. Automatic graph checkpoint resumption
 public/multi-tenant security and ANN tuning require further work. Models and
 PDFs are not vendored. Restricted cloud network/model access is reported as a
 verification limitation, never disguised with mock inference.
+Desktop packaging/signing and GUI behavior depend on the platform; tests with
+scripted providers establish contracts, not real-model conversational quality.
+Actual upgrade checks and remaining verification gaps are recorded in the stage
+log for this checkout, rather than inferred from an available build command.
 
 The baseline and ADRs were written during the engineering repair; they are not
 recovered historical specifications or prior acceptance evidence. The stage log

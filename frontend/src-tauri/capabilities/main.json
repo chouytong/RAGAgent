@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "The local UI can use only the validated loopback API bridge.",
+  "windows": ["main"],
+  "permissions": ["allow-local-api"]
+}

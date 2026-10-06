@@ -5,11 +5,15 @@ Requires Git, Docker Engine/Desktop and Compose v2. Recommended: 8 GB RAM,
 PyTorch to avoid an unnecessary CUDA runtime. ARM and offline operation require
 compatible model packages/weights; Docker smoke verification uses amd64.
 
-Until the stacked PRs are reviewed and merged, clone the complete review branch:
+Until the stacked PRs are reviewed and merged, use
+[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations)
+for the conversation/desktop upgrade, including migration `0004` and `src-tauri`.
+It is based on the existing `phase-6-evaluation-deployment` RAG/Research baseline.
 
 ```bash
-git clone --branch phase-6-evaluation-deployment https://github.com/chouytong/RAGAgent.git
+git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
+# First checkout only; preserve an existing runtime .env.
 cp .env.example .env
 docker compose up --build
 ```
@@ -149,6 +153,26 @@ Migration `0003` adds arXiv family/version and source status. Existing explicit
 does not guess versions or withdrawal status from old PDF hashes. Different
 arXiv versions may share PDF bytes; uploaded PDFs retain hash deduplication.
 
+Migration `0004` adds local conversations, messages, summaries and explicit
+structured memories, and nullable conversation/idempotency fields on Runs. It
+preserves existing papers/chunks/evidence, legacy Runs and execution history.
+Existing deployments upgrade with Alembic; do not delete volumes or recreate the
+database to add chat. Back up the local database/volumes and stop API/worker writes
+while applying an upgrade:
+
+```bash
+docker compose stop api worker
+docker compose build api worker migrate frontend
+docker compose run --rm migrate
+docker compose up -d
+```
+
+For a host development database, `uv run alembic upgrade head` applies the same
+upgrade. The current head is `0004`. A downgrade from `0004` removes conversation
+tables/data and associations; it is not a preservation mechanism for chat history.
+Previously selected legacy last-Run browser state is not converted into a made-up
+multi-turn conversation. Legacy Runs remain accessible through their existing API.
+
 New unversioned arXiv imports resolve and store the current official `vN` ID;
 reimporting an unversioned ID checks the current version instead of reusing the
 old unversioned record. Versions are separate papers, without automatic update
@@ -182,6 +206,10 @@ npm --prefix frontend run check
 npm --prefix frontend run build
 npm --prefix frontend exec -- playwright install chromium
 npm --prefix frontend run test:e2e
+npm --prefix frontend run test:transport
+npm --prefix frontend run desktop:check
+npm --prefix frontend run desktop:test
+npm --prefix frontend run desktop:build
 ```
 
 Install `uv sync --extra parsing --extra models` for real parsing/inference.
@@ -195,6 +223,115 @@ failure/dispatch tests require `TEST_REDIS_URL` pointing to a dedicated Redis
 instance or unused logical database; tests clear that test queue/database.
 CI requires integration tests; a local skip is never a vector test pass.
 
+## Desktop UI with local backend
+
+Tauri 2 wraps the same React/Vite frontend in an independent application window.
+The first-stage package contains the UI and a scoped Rust transport, not Python,
+PostgreSQL, Redis, model weights or Docker. Start the existing local services
+first; the application checks them and displays an unavailable/not-ready state
+instead of a white screen. Closing the window stops its local subscriptions, not
+the backend services or already queued work.
+
+The desktop backend target is fixed at `http://127.0.0.1:8000`. Its Rust bridge
+does not accept a user-supplied backend URL, use HTTP proxies or follow redirects.
+Only scoped relative API routes/methods, bounded JSON/multipart bodies and Run SSE
+subscriptions are allowed. The WebView has no remote network/iframe capability,
+and external navigation/popups are denied. No FastAPI CORS/Origin relaxation is
+required; existing local Host/same-origin protection remains intact for Web mode.
+Keep Compose's `127.0.0.1` port bindings. The desktop window itself does not make
+the backend safe for public or shared deployment.
+
+Build prerequisites:
+
+- Node 22.18+ or 24 and locked npm dependencies.
+- Rust 1.90.0 from `frontend/src-tauri/rust-toolchain.toml`; Cargo.lock is committed.
+- Linux: C/C++ build tools, pkg-config, GTK 3, WebKitGTK 4.1, OpenSSL and librsvg
+  development libraries. On Debian/Ubuntu packages include `build-essential`,
+  `pkg-config`, `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libssl-dev`, `librsvg2-dev`.
+- Windows: Visual Studio C++ build tools and the WebView2 runtime.
+- macOS: Xcode command-line developer tools and the platform WebView.
+
+Start local infrastructure and the desktop development window:
+
+```bash
+cp .env.example .env  # only for a new checkout; preserve existing runtime settings
+docker compose up -d --build
+npm --prefix frontend ci
+npm --prefix frontend run desktop:dev
+```
+
+`desktop:dev` runs Vite on `127.0.0.1:1420` and opens Tauri; it does not manually
+open a browser. Configure runtime keys/local model mappings separately before
+inference. Readiness only establishes DB/Redis/worker availability, not provider
+credentials, model weights or answer quality.
+
+```bash
+npm --prefix frontend run desktop:check  # cargo check --locked
+npm --prefix frontend run desktop:test   # cargo test --locked
+npm --prefix frontend run desktop:build  # release native binary, no installer
+npm --prefix frontend run desktop:bundle # platform installers; signing is separate
+```
+
+Without a custom Cargo target directory, the release executable is under
+`frontend/src-tauri/target/release/` (`scientific-ragagent-desktop`, with `.exe` on
+Windows). Start it to open the independent window. `--check-backend` checks the
+real fixed `/api/health` and `/api/ready` endpoints without a GUI, exits nonzero
+if unavailable and does not invoke a model. `--smoke-test` opens the window and
+asserts that its rendered DOM loaded, then exits. GUI checks require a display
+(or a supported Xvfb/WebKit setup); static/Rust/transport tests do not prove a
+window was actually displayed. See [stage-log](stage-log.md) for actual Linux
+checks and unresolved platform/GUI limits. Windows/macOS installers and signing
+are not implied by a Linux binary build.
+
+Citation PDFs and evaluation downloads use dedicated allowlisted local-resource
+commands. After size/type validation they are cached privately under the platform
+app-cache `documents` directory and opened by the OS default reader. Citation
+paper/page information remains visible; an external PDF reader may not support
+automatic page jumps. These cache files are separate from the knowledge base and
+conversation database; remove them separately when deleting local copies. Each
+document is limited to 128 MiB; the cache is bounded to 256 MiB and removes its
+oldest managed documents when space is needed. The bridge does not expose an
+arbitrary OS opener or filesystem path to the renderer.
+
+## Web fallback and conversation configuration
+
+The existing Compose Web UI stays at `http://localhost:8080`. For frontend
+development, run `npm --prefix frontend run dev` and open
+`http://127.0.0.1:5173`; Vite proxies `/api` to the local backend and preserves Host.
+Both modes call the same Conversation/Message/Run APIs and can independently load
+the same PostgreSQL history. No cloud conversation storage or second SQLite
+database is introduced.
+
+| Runtime setting | Default | Scope |
+|---|---|---|
+| `CONVERSATION_RECENT_MESSAGE_LIMIT` | 8 | 2–64 eligible recent messages, not rounds. |
+| `CONVERSATION_CONTEXT_TOKEN_BUDGET` | 8192 | 4096–65536 conservative input units; one UTF-8 byte per estimated token, including rewrite instruction/schema and a wrapper reserve. |
+| `CONVERSATION_SUMMARY_MAX_BYTES` | 2048 | 256–16384 UTF-8 bytes for the rolling extractive summary. |
+| `CONVERSATION_MESSAGE_MAX_BYTES` | 2048 | 256–16384 bytes per recent-message/memory excerpt sent to contextualization; stored messages stay intact. |
+
+This budget applies only to query contextualization input. It is not a measured
+provider token count or a total graph/output/spending cap; existing evidence and
+retry budgets remain separate. Budgets smaller than the fixed prompt/schema plus
+the current question produce `context_budget_exceeded` rather than sending an
+oversized request. More context may cost more and does not establish better
+retrieval quality. A lossy summary can omit a necessary referent; ambiguous
+follow-ups fail explicitly and can be clarified in a new turn.
+
+Memory mutations and clear operations require an idle conversation. Clearing
+summary/memory leaves history; a future turn may regenerate a summary from it.
+Full clear/delete removes the conversation's message/Run/event records, without
+deleting PDFs, unrelated evaluations, cache copies or backups. Back up local
+history deliberately and do not use `docker compose down -v` unless data deletion
+is intended.
+
+Local volumes describe persistence, not every network boundary. Remote chat
+providers receive contextualization text and selected evidence; hosted embedding
+providers receive indexing/query text; remote judges receive evaluation payloads.
+Use local chat/embedding/reranker/parser resources and approved cached weights
+to keep inference local. No secret value belongs in a title, message or memory:
+runtime keys remain environment/secrets, and recognizable credential patterns are
+rejected without claiming a perfect free-text secret detector.
+
 For a fresh empty corpus using the default hosted supervisor without an API key,
 the Compose smoke runs through the frontend proxy:
 
@@ -206,8 +343,10 @@ It checks readiness, the frontend, empty-index search, a real RQ job ending with
 `provider_key_missing`, and terminal SSE replay through nginx. It requires an
 empty corpus and unconfigured OpenAI/Anthropic/DeepSeek supervisor; it does not
 test successful chat, PDF parsing or embedding/reranker weight inference, and
-never substitutes mock inference. CI runs it after Compose startup. It leaves
-the failed smoke Run/events available for inspection and does not delete data.
+never substitutes mock inference. CI runs it after Compose startup. It also
+verifies persisted conversation/message association, idempotency and explicit
+memory/history deletion. It clears and deletes only its own temporary conversation
+records; the standalone failed smoke Run/events remain available for inspection.
 
 ## Troubleshooting
 

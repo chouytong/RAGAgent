@@ -22,5 +22,5 @@ def db() -> Iterator[Session]:
 
 @pytest.fixture
 def empty_db(db: Session) -> Session:
-    db.execute(text("TRUNCATE papers, entities, runs CASCADE"))
+    db.execute(text("TRUNCATE papers, entities, runs, conversations CASCADE"))
     return db
