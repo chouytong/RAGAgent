@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     research_evidence_budget: int = Field(default=96, ge=1, le=512)
     provider_timeout: float = Field(default=60, gt=0, le=300)
     evaluation_timeout_seconds: int = Field(default=7200, ge=1800, le=86400)
+    conversation_recent_message_limit: int = Field(default=8, ge=2, le=64)
+    conversation_context_token_budget: int = Field(default=8192, ge=4096, le=65536)
+    conversation_summary_max_bytes: int = Field(default=2048, ge=256, le=16384)
+    conversation_message_max_bytes: int = Field(default=2048, ge=256, le=16384)
     max_upload_bytes: int = Field(default=30 * 1024 * 1024, ge=1)
 
     @model_validator(mode="after")

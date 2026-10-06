@@ -3,6 +3,8 @@
 .venv
 **/node_modules
 **/dist
+**/target
+frontend/src-tauri/gen
 **/__pycache__
 .pytest_cache
 .mypy_cache

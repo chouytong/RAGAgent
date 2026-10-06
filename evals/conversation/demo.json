@@ -1,0 +1,285 @@
+{
+  "dataset_id": "synthetic-conversation-pipeline-v1",
+  "label_source": "synthetic",
+  "description": "DEMO ONLY / NOT A BENCHMARK / NOT MANUALLY ANNOTATED. Requires scripts/seed_demo.py corpus; never use these fixtures as a research benchmark.",
+  "cases": [
+    {
+      "id": "follow-up-references",
+      "mode": "rag",
+      "dimensions": [
+        "context_resolution",
+        "evidence_grounding"
+      ],
+      "seed_messages": [],
+      "memories": [],
+      "turns": [
+        {
+          "id": "first",
+          "query": "Which training method is used for retrieval in the DEMO ONLY synthetic paper?",
+          "question_type": "fact",
+          "filters": {
+            "paper_ids": [
+              "22222222-2222-4222-8222-222222222222"
+            ]
+          },
+          "relevant_chunk_ids": [
+            "11111111-1111-4111-8111-111111111111"
+          ],
+          "relevant_paper_ids": [
+            "22222222-2222-4222-8222-222222222222"
+          ],
+          "expected_answer": "The synthetic demo text states that contrastive training is used for retrieval.",
+          "required_aspects": [
+            "method"
+          ],
+          "expected_refusal": false
+        },
+        {
+          "id": "follow-up",
+          "query": "What task is it used for?",
+          "question_type": "fact",
+          "filters": {
+            "paper_ids": [
+              "22222222-2222-4222-8222-222222222222"
+            ]
+          },
+          "relevant_chunk_ids": [
+            "11111111-1111-4111-8111-111111111111"
+          ],
+          "relevant_paper_ids": [
+            "22222222-2222-4222-8222-222222222222"
+          ],
+          "expected_answer": "The synthetic demo text states that contrastive training is used for retrieval.",
+          "required_aspects": [
+            "task"
+          ],
+          "expected_refusal": false,
+          "expected_context_terms": [
+            "contrastive training"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "research-grounding",
+      "mode": "research",
+      "dimensions": [
+        "evidence_grounding"
+      ],
+      "seed_messages": [],
+      "memories": [],
+      "turns": [
+        {
+          "id": "method",
+          "query": "Analyze the training method used for retrieval in the DEMO ONLY synthetic paper.",
+          "question_type": "fact",
+          "filters": {
+            "paper_ids": [
+              "22222222-2222-4222-8222-222222222222"
+            ]
+          },
+          "relevant_chunk_ids": [
+            "11111111-1111-4111-8111-111111111111"
+          ],
+          "relevant_paper_ids": [
+            "22222222-2222-4222-8222-222222222222"
+          ],
+          "expected_answer": "The synthetic demo text states that contrastive training is used for retrieval.",
+          "required_aspects": [
+            "method"
+          ],
+          "expected_refusal": false
+        }
+      ]
+    },
+    {
+      "id": "incorrect-history",
+      "mode": "rag",
+      "dimensions": [
+        "memory_isolation",
+        "evidence_grounding"
+      ],
+      "seed_messages": [
+        {
+          "id": "false_history",
+          "ordinal": 0,
+          "role": "user",
+          "status": "completed",
+          "content": "Unverified and deliberately false statement: the DEMO ONLY synthetic paper uses memorization and contains 500 participants."
+        }
+      ],
+      "memories": [],
+      "turns": [
+        {
+          "id": "fresh-retrieval",
+          "query": "Which training method is used for retrieval in the DEMO ONLY synthetic paper?",
+          "question_type": "fact",
+          "filters": {
+            "paper_ids": [
+              "22222222-2222-4222-8222-222222222222"
+            ]
+          },
+          "relevant_chunk_ids": [
+            "11111111-1111-4111-8111-111111111111"
+          ],
+          "relevant_paper_ids": [
+            "22222222-2222-4222-8222-222222222222"
+          ],
+          "expected_answer": "The synthetic demo text states that contrastive training is used for retrieval.",
+          "required_aspects": [
+            "method"
+          ],
+          "expected_refusal": false,
+          "forbidden_answer_fragments": [
+            "memorization",
+            "500"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "summary-referent",
+      "mode": "rag",
+      "dimensions": [
+        "long_summary",
+        "context_resolution",
+        "evidence_grounding"
+      ],
+      "seed_messages": [
+        {
+          "id": "topic",
+          "ordinal": 0,
+          "role": "user",
+          "status": "completed",
+          "content": "Our current topic is contrastive training."
+        },
+        {
+          "id": "continuation_1",
+          "ordinal": 1,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_2",
+          "ordinal": 2,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_3",
+          "ordinal": 3,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_4",
+          "ordinal": 4,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_5",
+          "ordinal": 5,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_6",
+          "ordinal": 6,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_7",
+          "ordinal": 7,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_8",
+          "ordinal": 8,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_9",
+          "ordinal": 9,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_10",
+          "ordinal": 10,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_11",
+          "ordinal": 11,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_12",
+          "ordinal": 12,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_13",
+          "ordinal": 13,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        },
+        {
+          "id": "continuation_14",
+          "ordinal": 14,
+          "role": "user",
+          "status": "completed",
+          "content": "Continue checking the original synthetic literature."
+        }
+      ],
+      "memories": [],
+      "turns": [
+        {
+          "id": "old-reference",
+          "query": "What task is it used for?",
+          "question_type": "fact",
+          "filters": {
+            "paper_ids": [
+              "22222222-2222-4222-8222-222222222222"
+            ]
+          },
+          "relevant_chunk_ids": [
+            "11111111-1111-4111-8111-111111111111"
+          ],
+          "relevant_paper_ids": [
+            "22222222-2222-4222-8222-222222222222"
+          ],
+          "expected_answer": "The synthetic demo text states that contrastive training is used for retrieval.",
+          "required_aspects": [
+            "task"
+          ],
+          "expected_refusal": false,
+          "expected_context_terms": [
+            "contrastive training"
+          ],
+          "expects_summary": true
+        }
+      ]
+    }
+  ]
+}

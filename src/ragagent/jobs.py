@@ -1,17 +1,18 @@
 """Durable job dispatch, idempotent claims and terminal-state persistence."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, cast
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from ragagent.db.dispatch import JobDispatch
-from ragagent.db.models import ExecutionEvent, Paper, Run
+from ragagent.db.models import Conversation, ExecutionEvent, Message, Paper, Run
+from ragagent.domain.conversation import MessageStatus
 from ragagent.errors import ApplicationError
 from ragagent.settings import get_settings
 
-TERMINAL_STATUSES = {"completed", "insufficient_evidence", "failed"}
+TERMINAL_STATUSES = {"completed", "insufficient_evidence", "failed", "cancelled"}
 JOB_TIMEOUT_SECONDS = 1800
 RUNNING_GRACE_SECONDS = 120
 QUEUED_TIMEOUT_SECONDS = 1800
@@ -42,7 +43,25 @@ class InspectableQueue(DispatchQueue, Protocol):
     def status(self, run_id: str) -> str | None: ...
 
 
+def lock_conversation_for_run(session: Session, run_id: str, *, skip_locked: bool = False) -> bool:
+    """Use the same Conversation → Run lock order as message submission/deletion."""
+    with session.no_autoflush:
+        conversation_id = session.scalar(select(Run.conversation_id).where(Run.id == run_id))
+        if conversation_id is None:
+            return True
+        return (
+            session.scalar(
+                select(Conversation.id)
+                .where(Conversation.id == conversation_id)
+                .with_for_update(skip_locked=skip_locked)
+            )
+            is not None
+        )
+
+
 def locked_run(session: Session, run_id: str, *, skip_locked: bool = False) -> Run | None:
+    if not lock_conversation_for_run(session, run_id, skip_locked=skip_locked):
+        return None
     return session.scalar(
         select(Run)
         .where(Run.id == run_id)
@@ -100,6 +119,7 @@ def claim_run(session: Session, run_id: str) -> Run | None:
     dispatch.last_error_code = None
     freeze_job_timeout(run)
     run.status, run.error_code = "running", None
+    sync_assistant_message(session, run)
     session.add(
         ExecutionEvent(
             run_id=run.id, node="started", payload={"trace_id": run.trace_id, "kind": run.kind}
@@ -113,15 +133,50 @@ def ensure_running(session: Session, run: Run) -> None:
     # Do not autoflush a proposed terminal status before checking ownership. A
     # late worker must not overwrite a failure already recorded by reconciliation.
     with session.no_autoflush:
-        status = session.scalar(select(Run.status).where(Run.id == run.id).with_for_update())
+        identity = inspect(run).identity
+        run_id = str(identity[0]) if identity else run.id
+        if not lock_conversation_for_run(session, run_id):
+            raise ApplicationError("run_no_longer_active")
+        status = session.scalar(select(Run.status).where(Run.id == run_id).with_for_update())
     if status != "running":
         raise ApplicationError("run_no_longer_active")
+
+
+def sync_assistant_message(session: Session, run: Run) -> None:
+    """Persist the message beside its Run transition; never publish an intermediate draft."""
+    if run.conversation_id is None:
+        return
+    message = session.scalar(
+        select(Message).where(
+            Message.id == run.request.get("assistant_message_id"),
+            Message.conversation_id == run.conversation_id,
+            Message.run_id == run.id,
+            Message.role == "assistant",
+        )
+    )
+    if message is None:
+        raise ApplicationError("conversation_message_unavailable")
+    message.status = cast(MessageStatus, run.status)
+    message.updated_at = datetime.now(UTC)
+    message.metadata_json = {**message.metadata_json, "error_code": run.error_code}
+    if run.status == "completed":
+        result = run.result or {}
+        message.content = str(result.get("answer") or result.get("draft_report") or "")
+        if not message.content:
+            raise ApplicationError("conversation_answer_missing")
+    elif run.status == "insufficient_evidence":
+        message.content = "Insufficient verified literature evidence to answer this question."
+    elif run.status == "failed":
+        message.content = "This request failed. You can retry it or start a new turn."
+    elif run.status == "cancelled":
+        message.content = "This request was cancelled."
 
 
 def finish_run(session: Session, run: Run) -> None:
     if run.status not in TERMINAL_STATUSES:
         raise ApplicationError("invalid_terminal_state")
     ensure_running(session, run)
+    sync_assistant_message(session, run)
     session.add(ExecutionEvent(run_id=run.id, node="finished", payload={"status": run.status}))
     session.commit()
 
@@ -132,6 +187,7 @@ def fail_run(session: Session, run_id: str, code: str) -> None:
         session.rollback()
         return
     run.status, run.error_code = "failed", code
+    sync_assistant_message(session, run)
     # Only the run that persisted a parsing event owns this ingestion. A second
     # duplicate run must never mark another job's paper as failed.
     parsing = session.scalar(
@@ -149,6 +205,23 @@ def fail_run(session: Session, run_id: str, code: str) -> None:
         )
     )
     session.commit()
+
+
+def cancel_run(session: Session, run_id: str) -> Run | None:
+    """Revoke worker ownership before attempting a best-effort queue stop."""
+    run = locked_run(session, run_id)
+    if run is None:
+        session.rollback()
+        return None
+    if run.kind not in {"rag", "research"}:
+        session.rollback()
+        raise ApplicationError("run_cancel_not_supported")
+    if run.status not in TERMINAL_STATUSES:
+        run.status, run.error_code = "cancelled", None
+        sync_assistant_message(session, run)
+        session.add(ExecutionEvent(run_id=run.id, node="cancelled", payload={}))
+    session.commit()
+    return run
 
 
 def reconcile_jobs(

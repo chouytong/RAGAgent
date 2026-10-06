@@ -10,7 +10,7 @@ from ragagent.api.papers import DB, QueueDep, enqueue
 from ragagent.api.schemas import QueryRequest, ResearchRequest, RunResponse
 from ragagent.db.models import ExecutionEvent, Run
 from ragagent.db.session import session_factory
-from ragagent.jobs import TERMINAL_STATUSES
+from ragagent.jobs import TERMINAL_STATUSES, cancel_run
 
 router = APIRouter(tags=["runs"])
 
@@ -32,6 +32,26 @@ def status(run_id: str, db: DB) -> RunResponse:
     run = db.get(Run, run_id)
     if run is None:
         raise HTTPException(404, "run_not_found")
+    return RunResponse.model_validate(run)
+
+
+@router.post("/api/runs/{run_id}/cancel")
+def cancel(run_id: str, db: DB, queue: QueueDep) -> RunResponse:
+    existing = db.get(Run, run_id)
+    if existing is None:
+        raise HTTPException(404, "run_not_found")
+    if existing.kind not in {"rag", "research"}:
+        raise HTTPException(409, "run_cancel_not_supported")
+    run = cancel_run(db, run_id)
+    if run is None:
+        raise HTTPException(404, "run_not_found")
+    stop = getattr(queue, "cancel", None)
+    if run.status == "cancelled" and stop is not None:
+        try:
+            stop(run.id)
+        except Exception:
+            # Database ownership is already revoked; Redis failure cannot restore it.
+            pass
     return RunResponse.model_validate(run)
 
 

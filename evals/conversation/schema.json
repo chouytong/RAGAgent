@@ -1,0 +1,418 @@
+{
+  "$defs": {
+    "ContextMessage": {
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant",
+            "system"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "status": {
+          "default": "completed",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "ordinal",
+        "role",
+        "content"
+      ],
+      "title": "ContextMessage",
+      "type": "object"
+    },
+    "ConversationEvaluationCase": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "default": "rag",
+          "enum": [
+            "rag",
+            "research"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "dimensions": {
+          "items": {
+            "enum": [
+              "context_resolution",
+              "evidence_grounding",
+              "memory_isolation",
+              "long_summary"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Dimensions",
+          "type": "array"
+        },
+        "seed_messages": {
+          "items": {
+            "$ref": "#/$defs/ContextMessage"
+          },
+          "maxItems": 500,
+          "title": "Seed Messages",
+          "type": "array"
+        },
+        "memories": {
+          "items": {
+            "$ref": "#/$defs/StructuredMemory"
+          },
+          "maxItems": 100,
+          "title": "Memories",
+          "type": "array"
+        },
+        "turns": {
+          "items": {
+            "$ref": "#/$defs/ConversationEvaluationTurn"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Turns",
+          "type": "array"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "dimensions",
+        "turns"
+      ],
+      "title": "ConversationEvaluationCase",
+      "type": "object"
+    },
+    "ConversationEvaluationTurn": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "query": {
+          "maxLength": 10000,
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "question_type": {
+          "enum": [
+            "fact",
+            "comparison",
+            "synthesis",
+            "filter"
+          ],
+          "title": "Question Type",
+          "type": "string"
+        },
+        "filters": {
+          "$ref": "#/$defs/MetadataFilter"
+        },
+        "relevant_chunk_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relevant Chunk Ids",
+          "type": "array"
+        },
+        "relevant_paper_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relevant Paper Ids",
+          "type": "array"
+        },
+        "expected_answer": {
+          "title": "Expected Answer",
+          "type": "string"
+        },
+        "expected_refusal": {
+          "default": false,
+          "title": "Expected Refusal",
+          "type": "boolean"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "required_aspects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Aspects",
+          "type": "array"
+        },
+        "annotated_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotated By"
+        },
+        "annotated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotated At"
+        },
+        "expected_context_terms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Expected Context Terms",
+          "type": "array"
+        },
+        "forbidden_answer_fragments": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Forbidden Answer Fragments",
+          "type": "array"
+        },
+        "expects_summary": {
+          "default": false,
+          "title": "Expects Summary",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "query",
+        "question_type",
+        "expected_answer"
+      ],
+      "title": "ConversationEvaluationTurn",
+      "type": "object"
+    },
+    "MetadataFilter": {
+      "properties": {
+        "paper_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paper Ids",
+          "type": "array"
+        },
+        "authors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "year_start": {
+          "anyOf": [
+            {
+              "maximum": 2100,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year Start"
+        },
+        "year_end": {
+          "anyOf": [
+            {
+              "maximum": 2100,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year End"
+        },
+        "venues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Venues",
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sections",
+          "type": "array"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entity Types",
+          "type": "array"
+        },
+        "datasets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datasets",
+          "type": "array"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Methods",
+          "type": "array"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        }
+      },
+      "title": "MetadataFilter",
+      "type": "object"
+    },
+    "StructuredMemory": {
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "goal",
+            "constraint",
+            "term",
+            "preference",
+            "task"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "filters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetadataFilter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "content"
+      ],
+      "title": "StructuredMemory",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "dataset_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "label_source": {
+      "enum": [
+        "human",
+        "synthetic",
+        "unannotated"
+      ],
+      "title": "Label Source",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/ConversationEvaluationCase"
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "label_source",
+    "description",
+    "cases"
+  ],
+  "title": "ConversationEvaluationDataset",
+  "type": "object"
+}
