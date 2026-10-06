@@ -72,3 +72,57 @@ checksums exist. Explicit reembedding replaces all vectors/fingerprint for one
 paper in a transaction without replacing chunks, entity links or Evidence IDs.
 Chunk token counts use deterministic lexical tokens, not a provider tokenizer;
 provider context limits must be enforced independently.
+
+## Conversation records
+
+Migration `0004` adds four tables and nullable associations on Run. Existing
+papers, chunks, citations, Runs and events stay intact; legacy Runs have no
+conversation association. The migration upgrades the existing database and
+does not create replacement knowledge-base tables. Downgrading `0004` removes
+the new conversation data; back up before a downgrade.
+
+| Model/table | Stored fields and invariants |
+|---|---|
+| Conversation / `conversations` | UUID, title, `mode=rag\|research`, archived flag, metadata, created/updated timestamps; list order uses updated timestamp and ID. Mode is fixed after creation; the archived field is reserved, without an archive endpoint. |
+| Message / `messages` | UUID, conversation FK, role (`user`, `assistant`, internal `system`), content, nonnegative ordinal, nullable Run FK, status, metadata and timestamps. `(conversation_id, ordinal)` is unique and indexed; listing uses ordinal rather than timestamps. |
+| ConversationSummary / `conversation_summaries` | One record per conversation, content, covered `through_ordinal`, positive version, source message IDs/method metadata and timestamps. The text is unverified extractive conversation context, not scientific Evidence. |
+| Memory / `conversation_memories` | UUID, conversation FK, `kind=goal\|constraint\|term\|preference\|task`, optional key, content, optional structured filters, metadata and timestamps. Only `constraint` accepts filters; the API permits at most 100 memories per conversation. |
+| Run additions | Nullable conversation FK and client request UUID. `(conversation_id, client_request_id)` is unique. A partial unique index on queued/running conversation Runs enforces one active turn; legacy single-run APIs are unaffected. |
+
+```mermaid
+erDiagram
+ Conversation ||--o{ Message : contains
+ Conversation ||--o{ Run : owns
+ Conversation ||--o| ConversationSummary : summarizes
+ Conversation ||--o{ Memory : scopes
+ Run ||--o{ Message : associates
+ Run ||--o{ ExecutionEvent : traces
+ Run ||--o| JobDispatch : dispatches
+```
+
+The send transaction creates a user message, queued assistant placeholder, Run and
+dispatch intent together. Both messages reference that Run on the initial turn;
+retry adds a new assistant/Run while preserving the user's original association and
+all earlier attempts. Assistant transitions follow their Run. Final message content,
+terminal status and final event persist together; draft event payloads cannot become
+completed assistant messages. `cancelled` is a terminal Run/message status.
+
+Run request keeps the original turn and associated message IDs. Run result and
+context events record the contextualized query, context version/configuration,
+used source IDs and conservative input estimate. They do not create scientific
+Evidence from message IDs. Only freshly retrieved paper/chunk evidence is available
+to the selected graph's generation and verification paths.
+
+Conversation FKs cascade to messages, summary, memories and conversation Runs;
+Run deletion cascades to dispatch/events. Message's Run FK uses `SET NULL` when a
+Run is independently removed. The supported clear/delete API operations remove
+the conversation's messages and linked Runs together, so these operations do not
+leave identifiable conversation requests/results behind in the database.
+Deleting conversation records does not delete PDFs/chunks, unrelated evaluation
+Runs/artifacts, exported files, app-cache copies or backups. PostgreSQL deletion is
+logical deletion of records, not guaranteed forensic erasure of storage media.
+
+The API exposes explicit local memory creation/deletion, not automatic personal
+profile extraction. Known credential patterns in conversation title/message/memory
+input are rejected; no API-key value field is present. Arbitrary free text can still
+contain unrecognized sensitive material, so users should not paste secrets.

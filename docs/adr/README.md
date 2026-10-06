@@ -1,7 +1,8 @@
-# Architecture decisions for the engineering repair
+# Architecture decisions
 
-These records were written for the 2026-10-04 repair. They document decisions
-made in this work, not recovered historical ADRs or prior review approvals.
+Records 0001–0006 were written for the 2026-10-04 repair; 0007 records the
+2026-10-06 conversation/desktop product upgrade. They document decisions made in
+this work, not recovered historical ADRs or prior review approvals.
 Implementation and check outcomes are recorded separately in
 [stage-log.md](../stage-log.md). Acceptance requirements are in
 [MASTER_SPEC.md](../MASTER_SPEC.md).
@@ -14,3 +15,4 @@ Implementation and check outcomes are recorded separately in
 | [0004](0004-provider-and-index-identity.md) | Independent provider configuration and embedding-space identity |
 | [0005](0005-durable-dispatch-and-terminal-events.md) | Durable dispatch, state reconciliation and terminal SSE drain |
 | [0006](0006-review-corrections.md) | Review corrections for evidence, source/model identity, secrets and partial evaluation accounting |
+| [0007](0007-local-conversations-and-desktop.md) | Local conversations, bounded memory isolation, existing Run/SSE lifecycle and separate Tauri/Web transports |

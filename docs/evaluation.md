@@ -208,3 +208,84 @@ commit; source archives must supply a real `GIT_COMMIT` value.
 CI checks metrics against hand-calculated fixtures and executes real PostgreSQL
 ablations without paid APIs/model downloads. These are correctness tests; they
 are not evidence of retrieval improvement on research literature.
+
+## Conversational RAG and Research
+
+POST `/api/evaluations/conversation` with `{dataset, resume_run_id?}` queues the
+production conversation evaluator. Cases have `mode=rag|research`, explicit
+dimensions, optional seed messages/structured memories and ordered labeled turns.
+Each turn reuses the Context Builder, extractive rolling summary, configured
+retriever contextualization, the independent existing graph, current retrieval,
+citation validation and a separately instantiated model-based judge. Conversation
+history never becomes an EvidenceRecord or relevance label.
+
+The dataset schema/examples are in [evals/conversation](../evals/conversation/README.md).
+Existing expected-answer, required-aspect, corpus-relevance and human-annotation
+validation remains mandatory. Expected-refusal cases must be labeled explicitly.
+Additional labels include `expected_context_terms`, `forbidden_answer_fragments`
+and `expects_summary`. Dimension declarations require relevant labels rather than
+silently scoring unlabeled cases. Synthetic examples/templates remain **DEMO ONLY /
+NOT A BENCHMARK / NOT MANUALLY ANNOTATED** and require real corpus IDs/annotations
+before research-quality comparisons.
+
+After checking the labels against the current corpus and configuring providers,
+wrap a dataset file in the API request and submit it from the repository root:
+
+```bash
+python - <<'PY'
+import json
+from pathlib import Path
+dataset = json.loads(Path("my-conversations.json").read_text())
+Path("conversation-request.json").write_text(json.dumps({"dataset": dataset}))
+PY
+curl -H 'Content-Type: application/json' --data-binary @conversation-request.json \
+  http://localhost:8000/api/evaluations/conversation
+curl -N http://localhost:8000/api/runs/RUN_ID/events
+curl -o conversation-results.json \
+  http://localhost:8000/api/evaluations/RUN_ID/results.json
+```
+
+Replace `RUN_ID` with the returned Run UUID and download after it becomes terminal.
+The Evaluation UI supports the same conversation dataset/API. These operations
+invoke configured models and may incur charges; they do not create user chat
+Conversation records. Keep dataset/request/artifact files private when they contain
+private source text or seed history.
+
+| Dimension | Recorded checks and metrics |
+|---|---|
+| `context_resolution` | `resolution_accuracy`: all labeled expected terms occur in the contextualized query, case-insensitively; `context_budget_compliance`: rewrite input estimate stays within its configured budget. This is a labeled text check, not a complete semantic parser score. |
+| `evidence_grounding` | Existing citation precision/recall/completeness, answer completeness, unsupported-claim and refusal metrics over the actual released answer/current evidence; semantic judgment remains MODEL_BASED. |
+| `memory_isolation` | No forbidden historical answer fragments, exact paper/chunk/span provenance, evidence matching current-turn retrieval, context IDs absent from evidence, and a grounded complete answer (or explicitly labeled correct refusal). Empty ordinary answers cannot earn success. |
+| `long_summary` | For summary-labeled turns, summary was used, expected context terms remain resolved, budget is respected and the answer is grounded/complete; also records summary-used rate. |
+
+Per-turn artifacts retain original/contextualized queries, used context IDs,
+summary/version, enforced filters, current retrieval plans, structural checks,
+actual output/evidence/judge input and actual latency/usage. The manifest freezes
+context settings/version, rewrite-role prompt/hash, instantiated provider identities
+and source/configuration/corpus identities alongside existing evaluation provenance.
+Rewrite calls count as retriever usage; hosted embeddings count in workflow usage;
+the independent judge remains separately charged. Unknown or interrupted call fees
+make complete totals unknown.
+
+Checkpoints occur at context/usage/turn/case boundaries. A turn failure stops its
+conversation case so later turns do not inherit an incoherent partial dialogue;
+other cases continue. Summary metrics include only fully completed conversations
+and report completed/failed/pending counts. Dimension coverage/counts and missing
+dimensions are visible; a dataset exercising one dimension does not establish
+coverage of all four. Within successful cases, labeled turn metrics are averaged;
+undefined values remain null rather than becoming perfect scores.
+
+Explicit resume skips only fully completed conversation cases. A failed or
+interrupted conversation reruns as a whole, including its earlier turns, because
+their history affects later turns. Source/dataset/model/context/prompt/corpus
+identities must match, and previous-attempt usage remains separate. This is not
+intra-conversation graph checkpoint restoration or a claim that repeated inference
+will be deterministic.
+
+Term-presence and forbidden-fragment checks can miss paraphrases, irrelevant text
+or subtle reference errors. Model-based judgment can be wrong or correlated with
+the graph reviewer. Synthetic/provider-scripted regression tests establish routing,
+budget and evidence separation contracts; they do not establish real scientific
+chat quality. Real PDFs, fixed model revisions, human-labeled conversation cases,
+remote-provider compatibility and long-history quality need separate runs. Actual
+execution results are recorded in the stage log, without invented benchmark gains.
