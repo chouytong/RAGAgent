@@ -142,6 +142,9 @@ class MessageResponse(BaseModel):
     role: MessageRole
     content: str
     ordinal: int
+    retry_of_message_id: str | None = None
+    attempt_number: int = Field(default=1, ge=1)
+    is_effective: bool = True
     run_id: str | None
     status: MessageStatus
     metadata: dict[str, Any]

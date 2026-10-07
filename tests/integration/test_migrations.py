@@ -7,6 +7,8 @@ import uuid
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
@@ -23,6 +25,10 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
     admin = create_engine(url, isolation_level="AUTOCOMMIT", hide_parameters=True)
     probe = create_engine(url.set(database=database_name), hide_parameters=True)
     root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "migrations"))
+    current_head = ScriptDirectory.from_config(config).get_current_head()
+    assert current_head is not None
     environment = {
         **os.environ,
         "DATABASE_URL": url.set(database=database_name).render_as_string(hide_password=False),
@@ -117,7 +123,19 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
         failure = alembic("downgrade", "0002", succeeds=False)
         assert "source_identity_downgrade_requires_unique_checksums" in failure
         with probe.begin() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version")) == current_head
+            )
+            assert (
+                connection.scalar(
+                    text(
+                        "SELECT count(*) FROM information_schema.columns "
+                        "WHERE table_schema='public' AND table_name='messages' "
+                        "AND column_name IN ('retry_of_message_id','attempt_number','is_effective')"
+                    )
+                )
+                == 3
+            )
             connection.execute(
                 text("UPDATE papers SET sha256=:sha WHERE id='legacy-pinned'"),
                 {"sha": "c" * 64},
@@ -147,7 +165,9 @@ def test_legacy_upgrade_and_lossless_downgrade() -> None:
         failure = alembic("downgrade", "0001", succeeds=False)
         assert "section_identity_downgrade_requires_unique_display_paths" in failure
         with probe.begin() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version")) == current_head
+            )
             assert connection.scalar(text("SELECT count(*) FROM job_dispatches")) == 2
             assert connection.scalar(text("SELECT count(*) FROM sections")) == 3
             connection.execute(text("DELETE FROM sections WHERE id='new-occurrence'"))

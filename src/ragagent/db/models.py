@@ -244,6 +244,7 @@ class Message(Base):
     __table_args__ = (
         UniqueConstraint("conversation_id", "ordinal", name="uq_messages_conversation_ordinal"),
         CheckConstraint("ordinal >= 0", name="ck_messages_ordinal"),
+        CheckConstraint("attempt_number >= 1", name="ck_messages_attempt_number"),
         CheckConstraint("role IN ('user', 'assistant', 'system')", name="ck_messages_role"),
         CheckConstraint(
             "status IN ('queued', 'running', 'completed', "
@@ -257,6 +258,11 @@ class Message(Base):
     role: Mapped[Literal["user", "assistant", "system"]] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text, default="")
     ordinal: Mapped[int] = mapped_column(Integer)
+    retry_of_message_id: Mapped[str | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
+    is_effective: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     run_id: Mapped[str | None] = mapped_column(
         ForeignKey("runs.id", ondelete="SET NULL"), index=True
     )

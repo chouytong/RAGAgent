@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from collections import Counter
 from typing import Any
 
@@ -7,6 +8,7 @@ from ragagent.domain.research import (
     Claim,
     ClaimEvidencePair,
     ClaimVerdict,
+    ComparisonEntityCoverage,
     EvidenceRecord,
     EvidenceSufficiencyResult,
     QueryPlan,
@@ -82,12 +84,70 @@ def merge_evidence(
     return combined[:max_records], len(combined) > max_records
 
 
+def _entity_name(text: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+
+
+def _entity_grounded(entity: str, evidence: EvidenceRecord) -> bool:
+    # Names locate entities; their presence is not a semantic support verdict.
+    # ASCII boundaries reject e.g. Method A matching Method A1 while allowing
+    # Chinese entity names in continuous prose.
+    name = re.escape(_entity_name(entity))
+    pattern = re.compile(r"(?<![a-z0-9_])" + name + r"(?![a-z0-9_])")
+    return any(
+        pattern.search(_entity_name(text))
+        for text in [evidence.quote, evidence.paper.title]
+        + [context.quote for context in evidence.source_context]
+    )
+
+
+def _comparison_coverage(
+    entities: list[ComparisonEntityCoverage],
+    evidence: dict[str, EvidenceRecord],
+    supported_pairs: list[ClaimEvidencePair],
+    requested_entities: list[str],
+) -> tuple[list[ComparisonEntityCoverage], list[str]]:
+    """Combine explicit semantic entity support with deterministic source/pair checks."""
+    names = [_entity_name(item.entity) for item in entities]
+    errors: list[str] = []
+    if len(set(names)) < 2 or any(not name for name in names):
+        errors.append("comparison_needs_two_supported_entities")
+    if len(names) != len(set(names)):
+        errors.append("comparison_duplicate_entity")
+    if not {_entity_name(name) for name in requested_entities}.issubset(names):
+        errors.append("comparison_requested_entity_missing")
+    valid_pairs = {(pair.claim_id, pair.evidence_id) for pair in supported_pairs}
+    accepted: list[ComparisonEntityCoverage] = []
+    for entity in entities:
+        pairs = [(pair.claim_id, pair.evidence_id) for pair in entity.supporting_pairs]
+        if not entity.supported:
+            errors.append("comparison_entity_not_semantically_supported")
+        elif (
+            len(pairs) != len(set(pairs))
+            or not pairs
+            or any(pair not in valid_pairs for pair in pairs)
+        ):
+            errors.append("comparison_entity_support_pair_invalid")
+        elif any(
+            pair.evidence_id not in evidence
+            or not _entity_grounded(entity.entity, evidence[pair.evidence_id])
+            for pair in entity.supporting_pairs
+        ):
+            errors.append("comparison_entity_not_source_grounded")
+        else:
+            accepted.append(entity)
+    return accepted, list(dict.fromkeys(errors))
+
+
 async def verify_claims(
     claims: list[Claim],
     evidence: list[EvidenceRecord],
     aspects: list[str],
     provider: ChatProvider,
     question: str = "",
+    *,
+    comparison: bool = False,
+    comparison_entities: list[str] | None = None,
 ) -> CitationValidation:
     if len({c.claim_id for c in claims}) != len(claims):
         return CitationValidation(
@@ -109,6 +169,7 @@ async def verify_claims(
     ]
     model_missing: list[str] = []
     validated_pairs: list[ClaimEvidencePair] = []
+    entity_coverage: list[ComparisonEntityCoverage] = []
     if eligible:
         cited_ids = {eid for claim in eligible for eid in claim.evidence_ids}
         response = await provider.complete(
@@ -119,15 +180,25 @@ async def verify_claims(
             "parts of a comparison. A supported claim does not make every attached citation "
             "valid: omit irrelevant or unsupported pairs. Return each supported pair once. "
             "Also assess whether the original question and required aspects are fully answered. "
+            "When comparison_required is true, return comparison_entities for at least two "
+            "distinct canonical compared entities, including every requested entity. For each "
+            "entity, supported must assess whether the cited quotes support that entity's "
+            "compared facts, not merely whether its name occurs. List supporting_pairs from "
+            "the supported claim/citation pairs only. Names must be verbatim source names "
+            "in those quotes, auxiliary source quotes or paper titles. Never count aliases "
+            "of one entity as different entities; do not infer support from paper count. "
             "Return one verdict per claim; do not assign a confidence probability.",
             {
                 "question": question,
                 "required_aspects": aspects,
+                "comparison_required": comparison,
+                "requested_comparison_entities": comparison_entities or [],
                 "claims": [c.model_dump() for c in eligible],
                 "evidence": [evidence_payload(by_id[eid]) for eid in sorted(cited_ids)],
             },
             VerificationResponse,
         )
+        entity_coverage = response.comparison_entities
         model_missing = response.missing_aspects + (
             [] if response.question_answered else ["original_question"]
         )
@@ -175,12 +246,22 @@ async def verify_claims(
     supported = {v.claim_id for v in verdicts if v.supported and not v.contradiction}
     covered = {c.aspect for c in claims if c.claim_id in supported}
     missing = list(dict.fromkeys([a for a in aspects if a not in covered] + model_missing))
+    comparison_errors: list[str] = []
+    validated_entities: list[ComparisonEntityCoverage] = []
+    if comparison:
+        validated_entities, comparison_errors = _comparison_coverage(
+            entity_coverage, by_id, validated_pairs, comparison_entities or []
+        )
+        if comparison_errors:
+            missing.append("comparison_entities")
     return CitationValidation(
         valid=bool(claims) and len(supported) == len(claims) and not missing,
         verdicts=verdicts,
         supported_pairs=validated_pairs,
         missing_citations=invalid,
         missing_aspects=missing,
+        comparison_entities=validated_entities,
+        comparison_errors=comparison_errors,
     )
 
 
@@ -197,9 +278,18 @@ def evidence_gate(
     if not unique:
         status = Sufficiency.INSUFFICIENT
         reasons.append("no_usable_evidence")
-    elif plan.question_type == "comparison" and len(papers) < 2:
-        status = Sufficiency.PARTIAL
-        reasons.append("comparison_needs_multiple_papers")
+    # Before generation this is a usable-source gate, not a semantic comparison
+    # verdict. One paper or one chunk may support several compared entities.
+    if unique and plan.question_type == "comparison" and validation is not None:
+        _, comparison_errors = _comparison_coverage(
+            validation.comparison_entities,
+            {item.evidence_id: item for item in unique.values()},
+            validation.supported_pairs,
+            plan.comparison_entities,
+        )
+        if comparison_errors:
+            status = Sufficiency.PARTIAL
+            reasons.extend(comparison_errors)
     if validation is not None and not validation.valid:
         status = (
             Sufficiency.INSUFFICIENT

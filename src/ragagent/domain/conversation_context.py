@@ -20,6 +20,11 @@ class ContextMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
     status: str = "completed"
+    retry_of_message_id: str | None = Field(
+        default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    attempt_number: int = Field(default=1, ge=1)
+    is_effective: bool = True
 
 
 class StructuredMemory(BaseModel):

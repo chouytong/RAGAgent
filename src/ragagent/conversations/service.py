@@ -48,13 +48,26 @@ async def prepare_context(
         if saved is not None and saved.through_ordinal < user.ordinal
         else RollingSummary()
     )
+    superseded_summary_source = bool(
+        summary.source_message_ids
+        and session.scalar(
+            select(Message.id)
+            .where(
+                Message.conversation_id == run.conversation_id,
+                Message.id.in_(summary.source_message_ids),
+                Message.role == "assistant",
+                Message.is_effective.is_(False),
+            )
+            .limit(1)
+        )
+    )
     history = list(
         session.scalars(
             select(Message)
             .where(
                 Message.conversation_id == run.conversation_id,
                 Message.ordinal < user.ordinal,
-                Message.ordinal > summary.through_ordinal,
+                Message.ordinal > (-1 if superseded_summary_source else summary.through_ordinal),
             )
             .order_by(Message.ordinal)
         )
@@ -76,6 +89,9 @@ async def prepare_context(
                 role=message.role,
                 content=message.content,
                 status=message.status,
+                retry_of_message_id=message.retry_of_message_id,
+                attempt_number=message.attempt_number,
+                is_effective=message.is_effective,
             )
             for message in history
         ],

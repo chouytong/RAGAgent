@@ -715,3 +715,34 @@ The preceding implementation head `670cc5f0ffdc873b1cfc2e91828e15f7d0a5896d`
 also completed GitHub's PR-triggered CI and Desktop workflows successfully
 (runs `37417995238` and `37417995251`). This does not change the recorded gaps in
 real-paper/actual-model scientific acceptance or platform packaging validation.
+
+
+## Engineering hardening — Phase 1 (2026-10-07 UTC)
+
+Comparison support now checks distinct source-grounded entities and explicit
+semantic claim/citation support, including comparisons within one paper. Retry
+attempts keep their audit rows while superseded attempts leave subsequent context
+and persisted summaries; migration 0005 preserves legacy data. Conversation
+deletion commits revocation/deletion before best-effort RQ cancellation. Existing
+transactional Run/Message/outbox and late-worker ownership guards remain in use.
+
+Changed files: domain research/conversation/context contracts; database Message
+model and migration 0005; conversation API/context/service; independent RAG and
+Research graph/state; evidence validation; comparison, retry-context, concurrency,
+delete and migration regressions; ENGINEERING_REVIEW.md and this stage log.
+
+Actual checks: Ruff format --check (151 files), Ruff lint, mypy (64 files), full
+Python tests on PostgreSQL 17.10/pgvector 0.8.2 and Redis (504 passed, 3 upstream
+warnings); npm ci/lint/check/build, 8 transport tests, 26 Playwright tests; Rust
+fmt/locked check/clippy -D warnings, 7 Rust tests, Linux Tauri native release build.
+Canonical Compose config and frozen-dependency image build passed. Full Compose
+startup failed with the managed environment's 32 GB VFS disk quota; DB/Redis health
+passed, API health/ready NOT EXECUTED. Cleanup retained database volumes. Windows,
+actual product GUI and actual-model scientific acceptance NOT EXECUTED. Commands,
+initial evidence and remaining Phase 2–8 scope are in ENGINEERING_REVIEW.md.
+
+The concurrent retry regression drains the real durable reconciliation path before
+asserting exactly one queue submission, and repeats reconciliation to verify
+idempotency. This retains the strict enqueue-count assertion when immediate
+skip_locked dispatch legitimately waits for another transaction. Migration tests
+resolve Alembic's current head and preserve legacy schema/data assertions.

@@ -9,7 +9,15 @@ from sqlalchemy.orm import Session
 from ragagent.api.papers import DB, QueueDep
 from ragagent.api.queue import JobQueue
 from ragagent.db.dispatch import JobDispatch
-from ragagent.db.models import Conversation, ConversationSummary, Memory, Message, Run, new_id
+from ragagent.db.models import (
+    Conversation,
+    ConversationSummary,
+    ExecutionEvent,
+    Memory,
+    Message,
+    Run,
+    new_id,
+)
 from ragagent.domain.conversation import (
     ConversationCreate,
     ConversationMode,
@@ -25,7 +33,7 @@ from ragagent.domain.conversation import (
     TurnResponse,
 )
 from ragagent.domain.research import MetadataFilter
-from ragagent.jobs import dispatch_run
+from ragagent.jobs import dispatch_run, sync_assistant_message
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 ACTIVE_STATUSES = ("queued", "running")
@@ -75,6 +83,9 @@ def message_response(db: Session, message: Message) -> MessageResponse:
         role=message.role,
         content=message.content,
         ordinal=message.ordinal,
+        retry_of_message_id=message.retry_of_message_id,
+        attempt_number=message.attempt_number,
+        is_effective=message.is_effective,
         run_id=message.run_id,
         status=message.status,
         metadata=message.metadata_json,
@@ -199,10 +210,35 @@ def rename_conversation(
 
 
 @router.delete("/{conversation_id}")
-def delete_conversation(conversation_id: str, db: DB) -> dict[str, str]:
+def delete_conversation(conversation_id: str, db: DB, queue: QueueDep) -> dict[str, str]:
     conversation = get_conversation(db, conversation_id, lock=True)
+    # Revoke execution ownership with the same Conversation -> Run lock order
+    # used by submission and worker transitions. Keep IDs for the lock-free RQ
+    # stop below: the privacy-preserving hard delete erases the Run rows too.
+    active_runs = list(
+        db.scalars(
+            select(Run)
+            .where(Run.conversation_id == conversation_id, Run.status.in_(ACTIVE_STATUSES))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    active_ids = [run.id for run in active_runs]
+    for run in active_runs:
+        run.status, run.error_code = "cancelled", None
+        sync_assistant_message(db, run)
+        db.add(ExecutionEvent(run_id=run.id, node="cancelled", payload={"reason": "deleted"}))
+    db.flush()
     db.delete(conversation)
     db.commit()  # FK cascades include Run requests/results, dispatches and events.
+    stop = getattr(queue, "cancel", None)
+    if stop is not None:
+        for run_id in active_ids:
+            try:
+                stop(run_id)
+            except Exception:
+                # A Redis outage cannot restore ownership or block data deletion.
+                pass
     return {"status": "deleted"}
 
 
@@ -313,6 +349,7 @@ def retry_message(
         raise HTTPException(404, "message_not_found")
     if (
         original.status not in {"failed", "cancelled", "insufficient_evidence"}
+        or not original.is_effective
         or original.ordinal != next_ordinal(db, conversation_id) - 1
     ):
         raise HTTPException(409, "message_not_retryable")
@@ -328,9 +365,22 @@ def retry_message(
         role="assistant",
         content="",
         ordinal=original.ordinal + 1,
+        retry_of_message_id=original.id,
+        attempt_number=original.attempt_number + 1,
+        is_effective=True,
         status="queued",
-        metadata_json={"retry_of_message_id": message_id},
+        metadata_json={
+            "retry_of_message_id": message_id,
+            "attempt_number": original.attempt_number + 1,
+            "is_effective": True,
+        },
     )
+    original.is_effective = False
+    original.metadata_json = {
+        **original.metadata_json,
+        "is_effective": False,
+        "superseded_by_message_id": assistant.id,
+    }
     query_key = "query" if conversation.mode == "rag" else "research_question"
     return persist_turn(
         db,

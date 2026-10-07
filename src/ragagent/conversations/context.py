@@ -262,6 +262,7 @@ class ContextBuilder:
                 message
                 for message in messages
                 if message.role != "system"
+                and (message.role != "assistant" or message.is_effective)
                 and message.status in {"completed", "insufficient_evidence"}
                 and message.content.strip()
             ),
@@ -275,6 +276,26 @@ class ContextBuilder:
             raise ApplicationError("context_memory_invalid")
         effective_filters = merge_context_filters(filters or MetadataFilter(), memories)
         previous = summary or RollingSummary()
+        superseded_ids = {
+            message.id
+            for message in messages
+            if message.role == "assistant" and not message.is_effective
+        }
+        if superseded_ids.intersection(previous.source_message_ids):
+            # An older refusal may already be in the persisted summary when its
+            # attempt is retried. Rebuild covered excerpts from effective rows;
+            # removing it only from the recent window would retain stale context.
+            rebuilt = roll_summary(
+                RollingSummary(version=previous.version),
+                [message for message in eligible if message.ordinal <= previous.through_ordinal],
+                self.config.summary_max_bytes,
+            )
+            previous = rebuilt.model_copy(
+                update={
+                    "through_ordinal": previous.through_ordinal,
+                    "version": max(rebuilt.version, previous.version + 1),
+                }
+            )
         recent = eligible[-self.config.recent_message_limit :]
         older = eligible[: len(eligible) - len(recent)]
         updated = roll_summary(previous, older, self.config.summary_max_bytes)
@@ -359,6 +380,7 @@ class ContextBuilder:
             "summary_version": updated.version,
             "summary_truncated": payload["conversation_summary"]["content"] != updated.content,
             "history_message_ids": list(message_sources),
+            "superseded_message_ids": sorted(superseded_ids),
             "recent_message_ids": list(sent_recent),
             "truncated_message_ids": [
                 message.id
