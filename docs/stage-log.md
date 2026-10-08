@@ -895,3 +895,12 @@ Compose config PASS. Local full Docker image/health/ready NOT EXECUTED (VFS quot
 Windows build is launched by publishing this phase; result/installer artifacts
 need separate actual evidence. Windows 11 human installation NOT EXECUTED;
 unsigned installers, no signing claim. Linux native release build PASS (1m33s).
+
+### Phase 7 Windows CI correction (2026-10-08 Asia/Shanghai)
+
+Actual first Windows run 37745437701 / job 113205680558 failed at Prettier:
+30 tracked text files acquired CRLF on Windows checkout; all later build/test
+steps were skipped, not passed. Add .gitattributes enforcing LF for auto-detected
+text without weakening/ignoring formatter checks. Linux Desktop and CI/Compose
+run 37745437745 on source 1f4f0a6bc0ba22f1f3880a9661ab4758e614e261 succeeded.
+Installer success remains unverified until the corrected Windows job runs.

@@ -1,0 +1,2 @@
+# Stable source/lockfile line endings across Linux and Windows checkouts.
+* text=auto eol=lf
