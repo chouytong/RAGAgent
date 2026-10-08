@@ -100,8 +100,12 @@ messages, a deterministic rolling extractive summary and explicitly added memori
 resolve pronouns/named candidates into a standalone question. The original and
 contextualized query are inspectable in execution details. Older excerpts may
 lose information; ambiguous references fail explicitly instead of guessing.
-`CONVERSATION_CONTEXT_TOKEN_BUDGET=8192` uses a conservative UTF-8 byte estimate
-for contextualization input, not a provider tokenizer or a total workflow budget.
+`CONVERSATION_CONTEXT_TOKEN_BUDGET=8192` uses a multilingual approximate token estimate with UTF-8 excerpt caps
+for contextualization input; this is not a provider tokenizer or a total workflow budget.
+Independent questions skip the rewrite model. Context-dependent questions use selected
+Top-K memory text; all structured hard filters still apply. A typed, source-linked
+conversation intent/entity state survives restart beside the extractive summary.
+The Memory panel exposes this state; changing memory invalidates it.
 
 **Memory ≠ Evidence.** Messages, summaries and memories only guide intent and
 retrieval. Both independent graphs retrieve fresh source evidence and retain the

@@ -1,0 +1,1302 @@
+{
+  "label": "SYNTHETIC CONTEXT CONSTRUCTION / NO LLM OR SCIENTIFIC QUALITY MEASURED",
+  "source_commit": "3e5c30fee40f6a32f5878c157e4cb79f5be0b913",
+  "source_identity_note": "Checkout base commit; measured module identity: context_source_sha256",
+  "context_source_sha256": "54410ce1a36951ffa340d2138b6511f4305de380e150a1294cd953df6067242f",
+  "clock": "perf_counter",
+  "samples_per_case": 15,
+  "cases": [
+    {
+      "messages": 50,
+      "stored_memories": 100,
+      "language": "en",
+      "fixture_sha256": "64be5fad9dcc8114b9bbc3249a20d1feb58fd39694c86d01ac13889c4f01fceb",
+      "samples": [
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.62479299621191
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 32.49035699991509
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 32.94954000739381
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 33.21874600078445
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 33.91663900401909
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 33.014988992363214
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 32.887927009142004
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 33.22938201017678
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 33.71732799860183
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 32.69966300285887
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 32.87068101053592
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 32.86814699822571
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 32.70126499410253
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 31.968851006240584
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 33.38814098970033
+        }
+      ]
+    },
+    {
+      "messages": 50,
+      "stored_memories": 100,
+      "language": "zh",
+      "fixture_sha256": "e4cedc474a4cda89ceac0d42ac30f417f9fecb72900478df09f02363dac72317",
+      "samples": [
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.28132399939932
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.05609399569221
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.57485599676147
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.26168300677091
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.221151993842795
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.18220499670133
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.10516800149344
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.846465006121434
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.63419699680526
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.48826700414065
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.416565996361896
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.106879994506016
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 41.1750299972482
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.44721199513879
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.47375300049316
+        }
+      ]
+    },
+    {
+      "messages": 100,
+      "stored_memories": 100,
+      "language": "en",
+      "fixture_sha256": "c780a35663692fab6b649dcbf93e97317c4c227dcc51ff033b802cefe6d6366f",
+      "samples": [
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.84975300368387
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.49060200061649
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.0561150086578
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.75336800026707
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.25389399915002
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 39.453673001844436
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 36.871357006020844
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.193492000573315
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.768659996800125
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.154242996824905
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.5564400019357
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.849072003155015
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 37.96647000126541
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.16629099310376
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5333,
+          "payload_bytes": 9288,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 38.80142798880115
+        }
+      ]
+    },
+    {
+      "messages": 100,
+      "stored_memories": 100,
+      "language": "zh",
+      "fixture_sha256": "1c3972a81d915c2e4cde538d38bc0a2490548cb28fc330383e5b441c1f3b8409",
+      "samples": [
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.9061389954295
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 51.74813201301731
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.502310003736056
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.77700400457252
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.54612600966357
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.5525160030229
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.42687600385398
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 46.67242300638463
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 45.552273993962444
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 45.20278600102756
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.78963400470093
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 46.10474700166378
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.748040003469214
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.86066001118161
+        },
+        {
+          "status": "constructed",
+          "estimated_input_tokens": 5103,
+          "payload_bytes": 7028,
+          "selected_memory_count": 8,
+          "filters": {
+            "paper_ids": [],
+            "authors": [],
+            "year_start": null,
+            "year_end": null,
+            "venues": [],
+            "sections": [
+              "Methods"
+            ],
+            "entity_types": [],
+            "datasets": [],
+            "methods": [],
+            "metrics": []
+          },
+          "construction_ms": 44.20552200463135
+        }
+      ]
+    }
+  ]
+}

@@ -158,7 +158,7 @@ pub fn validate_request(path: &str, method: &str) -> Result<(), String> {
     }
     let parts: Vec<&str> = route.trim_start_matches('/').split('/').collect();
     let allowed = match parts.as_slice() {
-        ["api", "health" | "ready"] => method == "GET",
+        ["api", "health" | "ready" | "queues"] => method == "GET",
         ["api", "search"] | ["api", "rag", "query"] | ["api", "research"] => method == "POST",
         ["api", "providers"] => matches!(method, "GET" | "PUT"),
         ["api", "providers", "test"] => method == "POST",
@@ -183,6 +183,7 @@ pub fn validate_request(path: &str, method: &str) -> Result<(), String> {
         }
         ["api", "conversations", id, "memory"] if uuid(id) => method == "DELETE",
         ["api", "conversations", id, "summary"] if uuid(id) => matches!(method, "GET" | "DELETE"),
+        ["api", "conversations", id, "state"] if uuid(id) => method == "GET",
         ["api", "conversations", id, "memories"] if uuid(id) => matches!(method, "GET" | "POST"),
         ["api", "conversations", id, "memories", item] if uuid(id) && uuid(item) => {
             method == "DELETE"

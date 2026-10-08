@@ -2,7 +2,7 @@
 
 日期：2026-10-07（UTC）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
 
-本报告是阶段记录。Phase 1–3 的实现和已执行检查如下；**Phase 4–8 均为 PENDING**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
+本报告是阶段记录。Phase 1–4 的实现和已执行检查如下；**Phase 5–8 均为 PENDING**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
 
 ## A. Initial Findings
 
@@ -41,7 +41,8 @@
 | 删除 | 数据库 cascade，未撤销外部排队任务 | 删除 commit 后 best-effort queue cancel；late write guard 保留 | 已实现，race 回归见 J |
 | 消息与前端刷新 | 完整 Run 随所有消息重复序列化；活跃任务每 4 秒全历史刷新 | 标量 RunSummary 投影，最近 50/双向 ordinal cursor；SSE 为主，active placeholder 单条对账；Run/Evidence lazy load | Phase 2 已实现、Before/After 实测完成 |
 | 队列 | 固定 research queue，一个 worker | 固定路由到 interactive/ingestion/evaluation；三个独立 Compose worker，单角色 CLI | Phase 3 已实现，真实 RQ/PG occupancy probe 见 G |
-| Memory、认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 4–8 PENDING** |
+| Context/Memory | 有历史就改写；全部 Memory 入 payload；仅 extractive summary | 双语 gate、Top-K text/全部硬约束、分项近似 token 预算、持久化 typed intent state | Phase 4 已实现，F 节实测 |
+| 认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 5–8 PENDING** |
 
 保留独立 RAG/Research Graph、PostgreSQL/pgvector、Redis/RQ、Knowledge Base、PDF/arXiv ingestion、SSE、Evaluation、Multi-provider、Tauri 和 Web fallback。没有从零重写或用大型基础设施替换现有组件。
 
@@ -107,9 +108,22 @@ English PostgreSQL FTS 是词法检索，不能写成 BM25。当前 exact vector
 
 ## F. Memory
 
-Stored Memory 是本地显式 goal/constraint/term/preference/task；基线把全部 records 送入 Context Builder，Selected Memory 的相关性 Top-K 尚未实现（Phase 4 PENDING）。结构化 constraint filters 与当前请求取交集，冲突明确失败，后续选择器不得跳过这些硬约束。
+`conversations/context.py:query_needs_context` 对独立问题跳过额外改写调用；代词/序号/上一轮提示仍需校验改写。`select_memories` 将 Stored Memory 与 Selected Memory 区分，默认 Top-K=8，按英文字词/中文 bigram 相关性、kind、ID 稳定排序；默认 selected memory/recent/summary 近似预算 1024/2048/1024。`merge_context_filters` 在选择前交集**全部**硬约束，未选文本的条件仍生效。指令、schema、wrapper/current query/filters/实体均计入总预算 8192；估算 CJK 每字 2、Latin/数字约每 3 字符 1、标点 1，仍保留 UTF-8 摘录上限。这不是精确 tokenizer 或真实费用上限。
 
-当前 context budget 默认 8192，是包括指令/schema/wrapper 的保守 UTF-8 byte 输入估算；不是精确 tokenizer、生成长度或全工作流费用限制。近期消息和有损滚动 extractive summary 保留 provenance。Phase 1 已处理 superseded retry 的 context/summary；结构化 state、standalone gate、Memory selector 和 50/100 条长对话测量仍 PENDING。
+`domain/conversation_context.py:ConversationState` 与 `db/models.py:ConversationStateRecord`（新增迁移 0006）持久化 goal、constraints、validated entities、显式短 term 和 open question，带 source IDs/version/through ordinal，标记非证据且没有 scientific findings 字段。`conversations/service.py:prepare_context` 恢复原会话仍有效的旧实体来源；superseded/删除的来源不得恢复。Memory 变更/summary 删除/clear 会使 state 失效。GET state + Memory 面板可查看；extractive summary 继续存在。
+
+原错误历史/Memory “500”→fresh 原文 “120/23” 的全部断言保留。为了继续覆盖 contextualizer 边界，原独立问题改为明确代词追问，未删掉错误文本进入改写输入、不能进入 analyst/reviewer、最终必须 fresh quote 的断言。
+
+`docs/benchmarks/context-before.json` / `context-after.json` 每案例 15 个原始 perf_counter 样本；50/100 条英/中文消息 + 同样 100 条 Memory，4 个共享字段 fixture hashes 相同。Before 在默认预算下四例均明确 `context_budget_exceeded`；After 四例构造成功、Top-K 8、全部 Methods 硬约束保留。只测 Context Builder CPU/序列化输入，不调用 LLM，不推断回答质量或端到端速度。下表从 raw samples 自动生成。
+
+| Fixture | Before status / p50 CPU | After input / p50 CPU |
+| --- | --- | --- |
+| 50 / en / 100 memories | budget_exceeded / 128.390 ms | 5333 approximate tokens / 32.950 ms |
+| 50 / zh / 100 memories | budget_exceeded / 133.751 ms | 5103 approximate tokens / 39.221 ms |
+| 100 / en / 100 memories | budget_exceeded / 133.681 ms | 5333 approximate tokens / 37.850 ms |
+| 100 / zh / 100 memories | budget_exceeded / 139.064 ms | 5103 approximate tokens / 44.790 ms |
+
+同机、顺序运行、每例 15 samples、无 inference；未控制 OS scheduling/CPU isolation，不提供质量或吞吐结论。
 
 **Conversation Context ≠ Scientific Evidence；Memory ≠ Evidence；Model Output ≠ Source of Truth。** 历史/Memory 仅理解意图和实体；答案仍需本轮检索原文、exact span、claim/pair semantic verification、确定性引用。现有错误历史/错误 Memory 回归已保留；实际模型面对 adversarial history/document injection 的失败率未测。
 
@@ -160,7 +174,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## K. Known Limitations
 
-- **Phase 4–8 未完成**；Memory 选择、Local API auth、Windows 工程化等仍需实施并重新测试。
+- **Phase 5–8 未完成**；真实多语言模型对比、Local API auth、Windows 工程化等仍需实施并重新测试。
 - semantic verifier 是 model-based 检查，可能判断错误；source-grounded 名字与 exact substring 不等于科研结论正确，最终结论需人工复核。
 - summary 为有损 extractive；改写输入预算不是总费用上限。取消/删除不能撤回已经发出的远端请求或保证零费用。
 - Before/After 性能数据仅合成 API fixture；浏览器渲染性能和真实多语言检索质量尚未测量；队列隔离仅有单次合成 probe；不生成推断指标。
@@ -169,7 +183,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## L. Future Work
 
-Phase 4–8 属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
+Phase 5–8 属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
 
 
 ### Phase 2 checks (2026-10-08 Asia/Shanghai)
@@ -205,3 +219,20 @@ frontend 镜像沿用 Phase 2 已验证内容。Windows CI/真实模型验收仍
 Linux Tauri 本阶段 build 状态另行记入阶段日志，未据打包推断产品窗口或 Windows 能力。
 
 Phase 3 Linux Tauri `npm run desktop:build`：PASS，实际 release 编译 1m21s；未测 Windows 或产品窗口。
+
+
+### Remote validation and source mapping
+
+Phase 2 GitHub Actions [CI run 37731584513](https://github.com/chouytong/RAGAgent/actions/runs/37731584513)：backend/frontend/Compose 均 success，真实完成 config、build、full up、health/ready 和 smoke。该检查对应 head `9bc1aeae9321a8e4011f7a6a33c8ba9825dea874`，不能当作 Phase 3/4 通过。
+
+MCP 发布保留源码 tree SHA，commit metadata 重建后：Phase 2 implementation 本地 `affa5d9` 对应远端 `cd1b3957732c0e0a66ac14de0d006a4723774416`（tree `e12f627d6a604f687b1998ea59a2b264df47494b`）；Phase 3 本地 `2d0c8aa` 对应远端 `3e5c30fee40f6a32f5878c157e4cb79f5be0b913`（tree `dfd72cfbc43a4879b0ecfd1c137b5ead2b3cf68d`）。原始 measurement 的 recorded local commit 保留；Context measurement 是 working implementation，另记录 exact module SHA-256，base commit 不冒充 measured immutable commit。
+
+
+### Phase 4 checks (2026-10-08 Asia/Shanghai)
+
+新增 gate/selector/state 的单元与真实 PG restart/来源失效/clear 生命周期检查。
+Ruff format/lint、mypy 66 sources PASS，真实 PG/Redis 全量 **558 passed**（3 upstream warnings）；
+前端 npm ci/lint/check/build、**8 transport + 28 Playwright** PASS；
+Rust fmt/locked check/test/clippy **8 passed、0 ignored**；Linux Tauri release build PASS（1m23s）。
+Compose config PASS，当前版本本地 image build/full health/ready NOT EXECUTED（VFS 磁盘配额）；
+Phase 2 的远端 Compose success 不冒充本版本验证。Windows/真实模型科学验收 NOT EXECUTED。

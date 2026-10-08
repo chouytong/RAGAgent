@@ -299,6 +299,23 @@ class ConversationSummary(Base):
     )
 
 
+class ConversationStateRecord(Base):
+    __tablename__ = "conversation_states"
+    __table_args__ = (
+        CheckConstraint("through_ordinal >= 0", name="ck_conversation_states_ordinal"),
+        CheckConstraint("version >= 1", name="ck_conversation_states_version"),
+    )
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    through_ordinal: Mapped[int] = mapped_column(Integer)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    content: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
 class Memory(Base):
     __tablename__ = "conversation_memories"
     __table_args__ = (

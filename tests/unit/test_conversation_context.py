@@ -577,12 +577,12 @@ def test_context_checks_full_text_before_clipping_or_excluding_messages() -> Non
 
 async def test_scientific_token_words_in_context_reach_provider_without_false_positive() -> None:
     provider = CapturingProvider(
-        [{"status": "resolved", "contextualized_query": "Compare token counts in DANN."}]
+        [rewrite("Compare token counts in DANN.", name="DANN", source="m")]
     )
     result = await contextualize(
         ContextBuilder().build(
-            "Compare token counts in DANN.",
-            [ContextMessage(id="m", ordinal=0, role="user", content="Token accuracy is relevant.")],
+            "Compare token counts in it.",
+            [ContextMessage(id="m", ordinal=0, role="user", content="Token accuracy in DANN.")],
             memories=[
                 StructuredMemory(id="p", kind="preference", key="token count", content="Be brief")
             ],

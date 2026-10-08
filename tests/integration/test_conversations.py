@@ -1015,3 +1015,46 @@ def test_concurrent_delete_and_completion_cannot_recreate_messages(
         assert session.get(Conversation, conversation_id) is None
         assert session.get(Run, turn.run.id) is None
         assert session.get(Message, turn.assistant_message.id) is None
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "mutation", ["clear", "summary", "memory", "delete", "remove_one", "add_one"]
+)
+def test_intent_state_is_removed_with_its_context_sources(
+    conversation_client: TestClient, empty_db: Session, mutation: str
+) -> None:
+    from ragagent.db.models import ConversationStateRecord
+    from ragagent.domain.conversation_context import ConversationState
+
+    client = conversation_client
+    cid = create(client)
+    path = f"/api/conversations/{cid}"
+    memory = client.post(path + "/memories", json={"kind": "term", "content": "DANN"}).json()
+    empty_db.add(
+        ConversationStateRecord(
+            conversation_id=cid,
+            through_ordinal=0,
+            version=1,
+            content=ConversationState(through_ordinal=0).model_dump(),
+        )
+    )
+    empty_db.commit()
+    state = client.get(path + "/state")
+    assert state.status_code == 200 and state.json()["scientific_evidence"] is False
+    if mutation == "clear":
+        response = client.post(path + "/clear")
+    elif mutation == "delete":
+        response = client.delete(path)
+    elif mutation == "remove_one":
+        response = client.delete(path + "/memories/" + memory["id"])
+    elif mutation == "add_one":
+        response = client.post(
+            path + "/memories", json={"kind": "goal", "content": "Compare methods"}
+        )
+    else:
+        response = client.delete(path + "/" + mutation)
+    assert response.is_success
+    empty_db.expire_all()
+    assert empty_db.get(ConversationStateRecord, cid) is None
+    assert client.get(path + "/state").status_code == (404 if mutation == "delete" else 200)

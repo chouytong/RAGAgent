@@ -68,8 +68,8 @@ assistant answers and multi-agent drafts are not evidence for another turn.
 
 Older messages become a deterministic, lossy rolling extractive summary with
 message-source IDs. This avoids another summarization LLM charge and does not
-invent semantic facts. The input budget counts UTF-8 bytes conservatively as token
-units, including contextualizer instruction/schema and a wrapper reserve; it is
+invent semantic facts. The input budget uses a multilingual approximate token estimate with UTF-8
+excerpt caps, including contextualizer instruction/schema and a wrapper reserve; it is
 not an actual provider tokenizer, total graph prompt budget or completion budget.
 The original history remains stored until deletion. See
 [conversation-memory.md](conversation-memory.md) for configuration and limitations.

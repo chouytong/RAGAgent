@@ -162,3 +162,8 @@ network URLs. Web clients remain same-origin; no permissive CORS rule is added.
 its configured name, pending count, registered worker count and availability.
 Infrastructure readiness requires an interactive worker; inference readiness is
 not implied. Queue routing is durable and frozen per accepted Run.
+
+`GET /api/conversations/{id}/state` exposes typed source-linked intent/entities,
+version, through ordinal and `scientific_evidence=false`, or null. Memory mutation
+and summary/memory clear invalidate it. It is never passed to scientific evidence
+verification as an EvidenceRecord.

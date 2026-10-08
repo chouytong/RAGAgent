@@ -1,0 +1,342 @@
+{
+  "label": "SYNTHETIC CONTEXT CONSTRUCTION / NO LLM OR SCIENTIFIC QUALITY MEASURED",
+  "source_commit": "ba04246c82f556753c36980e76cf64360ca533ce",
+  "source_identity_note": "Checkout base commit; measured module identity: context_source_sha256",
+  "context_source_sha256": "4a9c1e8e6c2128ec7ea29ed1ca278d888e7ee3407d6ce3604026abc51568e14b",
+  "clock": "perf_counter",
+  "samples_per_case": 15,
+  "cases": [
+    {
+      "messages": 50,
+      "stored_memories": 100,
+      "language": "en",
+      "fixture_sha256": "64be5fad9dcc8114b9bbc3249a20d1feb58fd39694c86d01ac13889c4f01fceb",
+      "samples": [
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.39008000446483
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 124.74875799671281
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 134.44431399693713
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 125.50079199718311
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 123.25087800854817
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 126.43417000072077
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 123.24302700289991
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.75159100804012
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 133.52486600342672
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 188.36901600298006
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 122.72148000192828
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 126.48623899440281
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.49238500348292
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.4004460030701
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 137.5772389874328
+        }
+      ]
+    },
+    {
+      "messages": 50,
+      "stored_memories": 100,
+      "language": "zh",
+      "fixture_sha256": "e4cedc474a4cda89ceac0d42ac30f417f9fecb72900478df09f02363dac72317",
+      "samples": [
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.27642900811043
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 126.9600840023486
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.14845600223634
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 123.07283999689389
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 122.53838499600533
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 141.14237700414378
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 135.21000900072977
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 133.87217999843415
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 135.1716899953317
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 143.09097098885104
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 135.00654100789689
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 137.9740280099213
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 131.61572600074578
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 133.7513129983563
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 122.97154701082036
+        }
+      ]
+    },
+    {
+      "messages": 100,
+      "stored_memories": 100,
+      "language": "en",
+      "fixture_sha256": "c780a35663692fab6b649dcbf93e97317c4c227dcc51ff033b802cefe6d6366f",
+      "samples": [
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 134.30420200165827
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.1938350002747
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 127.19146200106479
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 133.71173800260294
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.25909300590865
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 129.1376190056326
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 133.6809210042702
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 140.84244500554632
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 134.24047600710765
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.82259000616614
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 138.64500900672283
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 139.00858699344099
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.46933701075613
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.0304139945656
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 134.2301839904394
+        }
+      ]
+    },
+    {
+      "messages": 100,
+      "stored_memories": 100,
+      "language": "zh",
+      "fixture_sha256": "1c3972a81d915c2e4cde538d38bc0a2490548cb28fc330383e5b441c1f3b8409",
+      "samples": [
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 136.31918000464793
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.74104701040778
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.57245199847966
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 128.20118699164595
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 143.61983501294162
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 137.57542500388809
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 139.06402100110427
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 135.33921200723853
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 144.37756400729995
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 143.45474599394947
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 146.80804598901886
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 140.39265699102543
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 143.81845500611234
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 134.83218800683971
+        },
+        {
+          "status": "failed",
+          "error_code": "context_budget_exceeded",
+          "construction_ms": 141.81705500232056
+        }
+      ]
+    }
+  ]
+}

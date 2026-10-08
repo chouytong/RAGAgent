@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { Memory, MemoryKind, Summary, api } from "./api";
+import { ConversationState, Memory, MemoryKind, Summary, api } from "./api";
 import type {
   Memory as MemoryType,
   MemoryKind as MemoryKindType,
   Summary as SummaryType,
+  ConversationState as StateType,
 } from "./api";
 import { ConfirmAction, FilterEditor, Json, emptyFilters } from "./components";
 
@@ -24,6 +25,7 @@ export function MemoryPanel({
 }) {
   const [summary, setSummary] = useState<SummaryType | null>(null);
   const [memories, setMemories] = useState<MemoryType[]>([]);
+  const [intentState, setIntentState] = useState<StateType | null>(null);
   const [kind, setKind] = useState<MemoryKindType>("goal");
   const [memoryKey, setMemoryKey] = useState("");
   const [content, setContent] = useState("");
@@ -33,13 +35,21 @@ export function MemoryPanel({
   const [notice, setNotice] = useState("");
   const base = `/api/conversations/${conversationId}`;
   async function refresh(signal?: AbortSignal) {
-    const [nextSummary, nextMemories] = await Promise.all([
+    const [nextSummary, nextMemories, nextState] = await Promise.all([
       api(`${base}/summary`, Summary.nullable(), undefined, "GET", signal),
       api(`${base}/memories`, z.array(Memory), undefined, "GET", signal),
+      api(
+        `${base}/state`,
+        ConversationState.nullable(),
+        undefined,
+        "GET",
+        signal,
+      ),
     ]);
     if (!signal?.aborted) {
       setSummary(nextSummary);
       setMemories(nextMemories);
+      setIntentState(nextState);
     }
   }
   useEffect(() => {
@@ -92,6 +102,15 @@ export function MemoryPanel({
       {active && <p role="status">本轮执行期间记忆为只读，结束后可编辑。</p>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+      {intentState && (
+        <details>
+          <summary>会话意图与实体 · 版本 {intentState.version}</summary>
+          <p>
+            用于理解研究目标和指代，非文献证据。来源失效或记忆修改后重新构建。
+          </p>
+          <Json value={intentState} />
+        </details>
+      )}
       <h4>Conversation Summary</h4>
       {summary ? (
         <>

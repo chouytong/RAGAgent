@@ -7,7 +7,7 @@ compatible model packages/weights; Docker smoke verification uses amd64.
 
 Until the stacked PRs are reviewed and merged, use
 [`fix/engineering-hardening`](https://github.com/chouytong/RAGAgent/tree/fix/engineering-hardening)
-for the conversation/desktop upgrade, including migration `0005` and `src-tauri`.
+for the conversation/desktop upgrade, including migration `0006` and `src-tauri`.
 It is based on the existing `phase-6-evaluation-deployment` RAG/Research baseline.
 
 ```bash
@@ -168,7 +168,7 @@ docker compose up -d
 ```
 
 For a host development database, `uv run alembic upgrade head` applies the same
-upgrade. The current head is `0005`. A downgrade from `0004` removes conversation
+upgrade. The current head is `0006`. A downgrade from `0004` removes conversation
 tables/data and associations; it is not a preservation mechanism for chat history.
 Previously selected legacy last-Run browser state is not converted into a made-up
 multi-turn conversation. Legacy Runs remain accessible through their existing API.
@@ -305,7 +305,11 @@ database is introduced.
 | Runtime setting | Default | Scope |
 |---|---|---|
 | `CONVERSATION_RECENT_MESSAGE_LIMIT` | 8 | 2–64 eligible recent messages, not rounds. |
-| `CONVERSATION_CONTEXT_TOKEN_BUDGET` | 8192 | 4096–65536 conservative input units; one UTF-8 byte per estimated token, including rewrite instruction/schema and a wrapper reserve. |
+| `CONVERSATION_CONTEXT_TOKEN_BUDGET` | 8192 | 4096–65536 approximate input tokens, including rewrite instruction/schema and a 512-token wrapper reserve; Latin/alphanumeric runs use roughly one token per 3 characters, CJK two per character. |
+| `CONVERSATION_RECENT_TOKENS` | 2048 | Recent-message payload subbudget. |
+| `CONVERSATION_SUMMARY_TOKENS` | 1024 | Summary payload subbudget. |
+| `CONVERSATION_MEMORY_TOKENS` | 1024 | Selected-memory payload subbudget. |
+| `CONVERSATION_MEMORY_TOP_K` | 8 | 1–100 selected memory texts; all hard filters apply regardless. |
 | `CONVERSATION_SUMMARY_MAX_BYTES` | 2048 | 256–16384 UTF-8 bytes for the rolling extractive summary. |
 | `CONVERSATION_MESSAGE_MAX_BYTES` | 2048 | 256–16384 bytes per recent-message/memory excerpt sent to contextualization; stored messages stay intact. |
 

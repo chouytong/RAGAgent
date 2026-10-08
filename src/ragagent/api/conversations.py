@@ -11,6 +11,7 @@ from ragagent.api.queue import JobQueue
 from ragagent.db.dispatch import JobDispatch
 from ragagent.db.models import (
     Conversation,
+    ConversationStateRecord,
     ConversationSummary,
     ExecutionEvent,
     Memory,
@@ -32,6 +33,7 @@ from ragagent.domain.conversation import (
     SummaryResponse,
     TurnResponse,
 )
+from ragagent.domain.conversation_context import ConversationState
 from ragagent.domain.research import MetadataFilter
 from ragagent.jobs import dispatch_run, sync_assistant_message
 
@@ -308,7 +310,7 @@ def clear_conversation(conversation_id: str, db: DB) -> ConversationResponse:
     conversation = get_conversation(db, conversation_id, lock=True)
     require_idle(db, conversation_id)
     db.execute(delete(Run).where(Run.conversation_id == conversation_id))
-    for model in (Message, ConversationSummary, Memory):
+    for model in (Message, ConversationSummary, ConversationStateRecord, Memory):
         db.execute(delete(model).where(model.conversation_id == conversation_id))
     conversation.title = "New chat"
     conversation.metadata_json = {"auto_title": True}
@@ -519,6 +521,11 @@ def delete_summary(conversation_id: str, db: DB) -> dict[str, str]:
     db.execute(
         delete(ConversationSummary).where(ConversationSummary.conversation_id == conversation_id)
     )
+    db.execute(
+        delete(ConversationStateRecord).where(
+            ConversationStateRecord.conversation_id == conversation_id
+        )
+    )
     db.commit()
     return {"status": "deleted"}
 
@@ -573,6 +580,11 @@ def create_memory(conversation_id: str, request: MemoryCreate, db: DB) -> Memory
         content=request.content,
         filters_json=request.filters.model_dump() if request.filters is not None else None,
     )
+    db.execute(
+        delete(ConversationStateRecord).where(
+            ConversationStateRecord.conversation_id == conversation_id
+        )
+    )
     db.add(memory)
     conversation.updated_at = datetime.now(UTC)
     db.commit()
@@ -587,6 +599,11 @@ def delete_memory(conversation_id: str, memory_id: str, db: DB) -> dict[str, str
     if memory is None or memory.conversation_id != conversation_id:
         raise HTTPException(404, "memory_not_found")
     db.delete(memory)
+    db.execute(
+        delete(ConversationStateRecord).where(
+            ConversationStateRecord.conversation_id == conversation_id
+        )
+    )
     db.commit()
     return {"status": "deleted"}
 
@@ -599,5 +616,17 @@ def clear_memory(conversation_id: str, db: DB) -> dict[str, str]:
     db.execute(
         delete(ConversationSummary).where(ConversationSummary.conversation_id == conversation_id)
     )
+    db.execute(
+        delete(ConversationStateRecord).where(
+            ConversationStateRecord.conversation_id == conversation_id
+        )
+    )
     db.commit()
     return {"status": "deleted"}
+
+
+@router.get("/{conversation_id}/state")
+def get_intent_state(conversation_id: str, db: DB) -> ConversationState | None:
+    get_conversation(db, conversation_id)
+    state = db.get(ConversationStateRecord, conversation_id)
+    return ConversationState.model_validate(state.content) if state is not None else None

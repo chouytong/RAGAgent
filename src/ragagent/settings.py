@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     conversation_context_token_budget: int = Field(default=8192, ge=4096, le=65536)
     conversation_summary_max_bytes: int = Field(default=2048, ge=256, le=16384)
     conversation_message_max_bytes: int = Field(default=2048, ge=256, le=16384)
+    conversation_recent_tokens: int = Field(default=2048, ge=128, le=32768)
+    conversation_summary_tokens: int = Field(default=1024, ge=128, le=16384)
+    conversation_memory_tokens: int = Field(default=1024, ge=128, le=16384)
+    conversation_memory_top_k: int = Field(default=8, ge=1, le=100)
     max_upload_bytes: int = Field(default=30 * 1024 * 1024, ge=1)
 
     @model_validator(mode="after")

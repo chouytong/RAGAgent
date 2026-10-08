@@ -198,6 +198,43 @@ export const Summary = z.object({
   updated_at: z.string(),
 });
 export type Summary = z.infer<typeof Summary>;
+export const ConversationState = z.object({
+  version: z.number().int().positive(),
+  through_ordinal: z.number().int(),
+  goals: z.array(
+    z.object({
+      source_kind: z.string(),
+      source_id: z.string(),
+      content: z.string(),
+    }),
+  ),
+  constraints: z.record(z.string(), z.unknown()),
+  constraint_memory_ids: z.array(z.string()),
+  resolved_entities: z.array(
+    z.object({
+      mention: z.string(),
+      resolved_text: z.string(),
+      source_kind: z.string(),
+      source_id: z.string(),
+    }),
+  ),
+  important_terms: z.array(
+    z.object({
+      source_kind: z.string(),
+      source_id: z.string(),
+      content: z.string(),
+    }),
+  ),
+  open_questions: z.array(
+    z.object({
+      source_kind: z.string(),
+      source_id: z.string(),
+      content: z.string(),
+    }),
+  ),
+  scientific_evidence: z.literal(false),
+});
+export type ConversationState = z.infer<typeof ConversationState>;
 export const MemoryKind = z.enum([
   "goal",
   "constraint",

@@ -802,3 +802,34 @@ Backend image build/full Compose health/ready NOT EXECUTED: VFS/32 GB quota,
 less than 1 GB available. Windows and real-model manual acceptance NOT EXECUTED.
 
 Phase 3 Linux Tauri `npm run desktop:build`：PASS，实际 release 编译 1m21s；未测 Windows 或产品窗口。
+
+## Engineering hardening — Phase 4 (2026-10-08 Asia/Shanghai)
+
+Added deterministic bilingual standalone gate, stable relevance Top-K Selected
+Memory separate from Stored Memory, all-hard-filter merging, multilingual
+approximate input estimation and independent recent/summary/memory subbudgets.
+A new typed `conversation_states` table (migration 0006) persists source-linked
+intent/entities alongside the extractive summary. Original eligible entity
+sources survive restart even after summary clipping; superseded/deleted sources
+cannot be restored. Mutation/clear lifecycle invalidates derived state; Memory
+panel/API expose it. Both README editions, memory/deployment/architecture/API
+contracts and `.env.example` match the new behavior.
+
+Preserved all false-history/false-memory scientific evidence assertions; made
+those questions explicit pronoun follow-ups to keep testing the rewritten path
+now that independent questions skip it. Source-linked state never enters
+analyst/reviewer Evidence. All migrations remain incremental.
+
+Actual 50/100 messages x English/Chinese x 100 memories probes ran both frozen
+baseline and working implementation, 15 samples per case, matched shared-field
+fixture hashes, source SHA-256 and raw timing/input records in docs/benchmarks.
+Baseline returns explicit budget exceeded; selected/bounded current requests
+construct successfully. No LLM/scientific quality measurement is inferred.
+
+Ruff format/lint/mypy PASS; real PG/Redis Python **558 passed**, 3 upstream warnings;
+npm ci/lint/check/build PASS; **8 transport / 28 Playwright** PASS;
+Rust fmt/locked check/test/clippy **8 passed / 0 ignored**;
+Linux Tauri release build PASS (1m23s); Compose config PASS. Local image build and
+full health/ready NOT EXECUTED due VFS/32 GB quota. Phase 2 GitHub Compose checks
+succeeded separately; this does not establish Phase 4 runtime success. Windows
+and actual multilingual models/manual science acceptance NOT EXECUTED.

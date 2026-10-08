@@ -261,6 +261,7 @@ export async function setupChat(
       conversation.title = "New chat";
       return reply(conversation);
     }
+    if (path[1] === "state") return reply(null);
     if (path[1] === "summary") {
       if (method === "DELETE") summaries.set(conversation.id, null);
       return reply(
