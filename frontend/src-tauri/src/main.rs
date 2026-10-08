@@ -24,6 +24,11 @@ fn local_auth_status(state: State<'_, Backend>) -> auth::CredentialStatus {
 }
 
 #[tauri::command]
+fn desktop_build_info() -> serde_json::Value {
+    serde_json::json!({"version": env!("CARGO_PKG_VERSION"), "sourceCommit": env!("RAGAGENT_SOURCE_COMMIT"), "builtAtUtc": env!("RAGAGENT_BUILD_TIME"), "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH, "signing": "unsigned"})
+}
+
+#[tauri::command]
 async fn api_request(
     request: ApiRequest,
     state: State<'_, Backend>,
@@ -208,7 +213,7 @@ fn main() {
     }
     let smoke = std::env::args().any(|arg| arg == "--smoke-test");
     tauri::Builder::default().manage(Backend{client,credentials,pending:Arc::new(Pending::default()),document_lock:tokio::sync::Mutex::new(())})
-        .invoke_handler(tauri::generate_handler![api_request,cancel_request,run_events,open_resource,local_auth_status])
+        .invoke_handler(tauri::generate_handler![api_request,cancel_request,run_events,open_resource,local_auth_status,desktop_build_info])
         .setup(move|app|{
             let window=WebviewWindowBuilder::new(app,"main",WebviewUrl::App("index.html".into()))
                 .title("Scientific RAGAgent").inner_size(1320.,900.).min_inner_size(800.,560.)

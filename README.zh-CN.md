@@ -336,3 +336,5 @@ Graph 检查点自动续跑、公共/多租户安全与 ANN 调优仍需要进�
 多语言模型采用仍未验证：[真实模型矩阵](docs/benchmarks/multilingual.md) 将现有模型、候选模型与翻译变体的指标标为 **Not measured**，需提供经审查的人工金标与已核验许可/版本的权重才能实测。CI 的脚本化 provider 不证明检索质量，默认配置保持不变。
 
 本机授权与 Web 开发临时凭据见 [部署说明](docs/deployment.md#local-owner-authentication)。原生凭据保存在系统凭据库，JS 只读取配对哈希；受保护的 API、SSE 与文献读取均需授权。
+
+Windows MSI/NSIS 制品由 [Desktop 工作流](.github/workflows/desktop.yml) 构建；仅使用成功运行的制品并核对哈希。见 [Windows 安装与限制](docs/deployment.md#windows-installers-and-build-provenance)。构建未签名，Windows 11 人工验收需单独完成。

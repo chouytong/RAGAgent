@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from rq import Queue, Worker
 from sqlalchemy import text
 
+from ragagent import __version__
 from ragagent.api import auth, conversations, evaluations, papers, providers, runs
 from ragagent.api.dependencies import get_search
 from ragagent.api.dispatcher import dispatcher_lifespan
@@ -22,7 +23,7 @@ from ragagent.evaluation.artifacts import usage_delta, usage_snapshot
 from ragagent.observability import configure_logging
 from ragagent.queues import queue_name
 
-app = FastAPI(title="Scientific RAGAgent", version="0.1.0", lifespan=dispatcher_lifespan)
+app = FastAPI(title="Scientific RAGAgent", version=__version__, lifespan=dispatcher_lifespan)
 app.include_router(auth.router)
 app.include_router(papers.router)
 app.include_router(runs.router)

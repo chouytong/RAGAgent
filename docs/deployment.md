@@ -467,3 +467,61 @@ artifacts are local persisted data. Selected context is sent to configured remot
 providers. Credential pattern rejection is a defense at persisted user-input
 boundaries, not a universal secret detector or a PDF content sanitizer. Back up
 and restrict access to the database, config and local cache directories.
+
+## Windows installers and build provenance
+
+The Desktop workflow has a `windows-latest` job that runs locked Rust checks,
+actual Windows Credential Manager round-trip tests, and Tauri MSI + NSIS builds.
+It uploads the actual `.msi`, NSIS `.exe`, `installer-manifest.json` (SHA-256,
+size/version/source/date), and `build-metadata.json`. Download artifacts from
+a successful **Desktop / windows-desktop** run matching the desired source.
+These are **unsigned Windows builds**: SmartScreen warnings may appear. Verify
+manifest hashes and provenance. No release signing/auto-update is configured.
+MSI is not a substitute for a human Windows 11 installation test.
+
+Prerequisites: Windows 10/11 x64, WebView2 Runtime, and the independent local
+backend (Docker Desktop/Compose or the documented Python/PostgreSQL/Redis setup).
+Install one package (MSI or NSIS), launch Desktop, pair its hash, then start backend.
+The installer installs the client only; it does not provision backend/model weights.
+Configure models server-side and perform a real citation-grounded chat, restart
+Desktop and confirm persistence. Uninstall via Windows Apps; local backend data
+and the OS credential are intentionally retained. To remove them, separately back
+up/delete the owned DB volumes/data and the Scientific RAGAgent Credential Manager
+entry; never use volume deletion as an ordinary upgrade command. Windows 11
+launch/connect/chat/restart/uninstall remains a manual acceptance requirement.
+
+Build locally with Node 22, Rust 1.90.0, MSVC C++ Build Tools + Windows SDK,
+WebView2 and the Tauri bundler prerequisites:
+
+```powershell
+npm --prefix frontend ci
+cd frontend
+npx tauri build --bundles msi,nsis -- --locked
+```
+
+Backend images package immutable source/date metadata and run as UID/GID 10001;
+Compose no longer mounts `.git`. Source checkout evaluation can use Git, but an
+installed artifact without Git records `unknown` instead of crashing. Runtime
+code/content fingerprints still identify actual sources/models/indexes separately.
+Set nonsecret `RAGAGENT_SOURCE_COMMIT` (40 hex) and `RAGAGENT_BUILD_TIME` (UTC ISO)
+as **build arguments** before image build; CI derives them from actual checkout.
+Desktop provenance is compiled into Rust; neither runtime needs a Git directory.
+Versions across Python/Web/Desktop are 0.2.0.
+
+### Upgrading existing local volumes
+
+Back up PostgreSQL/PDF/config first and preserve all existing volumes. Fresh
+named `papers`, `models`, `config` volumes inherit image ownership (10001).
+Old root-owned volumes require a one-time owner migration while API/workers are
+stopped; do not delete or replace the volumes. With your existing project/volumes,
+run `docker compose run --rm --no-deps --user 0 migrate chown -R 10001:10001 /data /models /app/config`.
+This explicit maintenance command changes only those application mounts.
+
+Default config now uses a persistent named `config` volume so nonroot API can
+save mappings. For an old bind-mounted `./config` customization, import it into
+the named volume before new tasks: `docker compose run --rm --no-deps -v "${PWD}/config:/import:ro" migrate python -c "import shutil; shutil.copyfile('/import/agents.yaml','/app/config/agents.yaml')"`.
+PowerShell uses `$PWD.Path` for the host path. Alternatively retain a custom bind
+mount through an overlay and grant UID 10001 write access explicitly. Indexes,
+conversations, messages, summaries, Memory and Run history are retained; Alembic
+upgrades in place. Do not run `down -v`. A missing verifier intentionally leaves
+readiness unready until pairing is complete.

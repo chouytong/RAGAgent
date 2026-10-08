@@ -2,7 +2,7 @@
 
 日期：2026-10-07（UTC）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
 
-本报告是阶段记录。Phase 1–6 的实现和已执行检查如下；**Phase 7–8 为 PENDING；Phase 5 真实模型指标未测量**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
+本报告是阶段记录。Phase 1–7 的实现和已执行检查如下；**Phase 8 为 PENDING；Phase 5 真实模型指标未测量**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
 
 ## A. Initial Findings
 
@@ -143,7 +143,9 @@ Phase 6：`api/auth.py` 要求 bearer SHA-256 verifier 或受限 HttpOnly Web se
 
 ## I. Windows
 
-真实 windows-latest CI、EXE、MSI、NSIS、build provenance、安装文档：**Phase 7 PENDING**。当前仅审查到 Linux CI 与通用 Tauri bundle 配置，不能推断 Windows installer 已构建。**Windows 11 install/launch/connect/chat/restart/uninstall：NOT EXECUTED。Signing：未验证、未签名状态待真实制品确定。**
+Phase 7 实现 `.github/workflows/desktop.yml:windows-desktop`：Windows 原生 Rust locked checks、Credential Manager 实际读写/删除测试、MSI 与 NSIS 构建，上传实际制品与 source/date/version/SHA-256 manifest。Windows CI 结果须单独核验，当前本地 Linux 不能推断 installer success。`src-tauri/build.rs` 将 provenance 编译进 native IPC；`build_info.py` / `build_metadata.py` 打包 backend 来源，缺 Git 显式 unknown，不再读缺失 `.git/HEAD` 崩溃；evaluation 保留实际 source content hash。Python/Web/Desktop version 对齐 0.2.0。
+
+`docker/backend.Dockerfile` 以非 root 10001 运行，Compose 移除 .git mount；writable config 改用持久卷。旧 root-owned data/models/config 的显式 owner migration/import 已写部署文档，不删论文、DB 或映射。**Windows 11 install/launch/connect/chat/restart/uninstall：NOT EXECUTED。Signing：未验证、未签名状态待真实制品确定。**
 
 产品仍是 **Desktop Client + Local Backend**：Tauri/React UI；独立运行 FastAPI、PostgreSQL/pgvector、Redis、RQ worker。不会为了打包把全部 backend 塞进 Tauri。Phase 8 的 PDF 页码定位、证据文案和 diagnostics 亦 PENDING；系统默认 PDF viewer 是否尊重页码尚未验证。
 
@@ -176,7 +178,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## K. Known Limitations
 
-- **Phase 7–8 未完成**；Phase 5 harness 已实现，真实多语言模型指标因资源/人工金标缺失仍未测量。
+- **Phase 8 未完成**；Phase 5 harness 已实现，真实多语言模型指标因资源/人工金标缺失仍未测量。
 - semantic verifier 是 model-based 检查，可能判断错误；source-grounded 名字与 exact substring 不等于科研结论正确，最终结论需人工复核。
 - summary 为有损 extractive；改写输入预算不是总费用上限。取消/删除不能撤回已经发出的远端请求或保证零费用。
 - Before/After 性能数据仅合成 API fixture；浏览器渲染性能和真实多语言检索质量尚未测量；队列隔离仅有单次合成 probe；不生成推断指标。
@@ -185,7 +187,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## L. Future Work
 
-Phase 7–8 与 Phase 5 受阻实测属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
+Phase 8 与 Phase 5 受阻实测属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
 
 
 ### Phase 2 checks (2026-10-08 Asia/Shanghai)
@@ -259,3 +261,10 @@ npm ci/lint/check/build、8 transport + **29 Playwright** PASS；Rust fmt/locked
 新增鉴权后首次全量 31 失败为旧 ASGI 客户端缺 Authorization，提前 401。显式给原测试客户端加凭据后原断言全部保留并通过。增加 Web 401→授权→恢复会话、清空输入/无浏览器 token 存储回归。四 provider 的新测试仅注入 SDK transport failure，证明安全错误路径及真实 Run/SSE 持久化，不代表实际模型连接/质量。
 
 Phase 5 远端当前 head `f57a4754737a4e32af2eec57a4633d1cf7055b20` 的 [CI 37735319681](https://github.com/chouytong/RAGAgent/actions/runs/37735319681) 与 [Linux Desktop 37735319800](https://github.com/chouytong/RAGAgent/actions/runs/37735319800) 均已 success，包括该版本 Compose build/up/health/ready/smoke。此证据不覆盖新增鉴权或 Windows。
+
+
+### Phase 7 checks (2026-10-08 Asia/Shanghai)
+
+Ruff format/lint、mypy 71 sources PASS；uv lock + sync --locked（190 packages，版本升为 0.2.0，未换依赖）PASS；真实 PG/Redis **593 passed**（3 upstream warnings）。npm ci/lint/check/build、8 transport + 29 Playwright PASS；Rust fmt/check/test/clippy locked **9 passed，0 ignored**。Compose config PASS；本地 backend image/full health/ready NOT EXECUTED（VFS 配额）。Linux native release build PASS（1m33s）。Windows job 已纳入待发布源码；实际构建与制品 status 不能预先声称 success。
+
+Phase 6 [CI 37737420508](https://github.com/chouytong/RAGAgent/actions/runs/37737420508) head `0a82f3a750ab15ee009c29618dbbb84b6bf8fe46` success，包含鉴权配置后的 Compose build/up/health/ready/真实 queued missing-key failure/SSE smoke。不覆盖 Phase 7 nonroot/config-volume 改动。

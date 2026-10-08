@@ -1,6 +1,6 @@
 [project]
 name = "scientific-ragagent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Evidence-grounded scientific literature RAG and research workflows"
 requires-python = ">=3.11,<3.14"
 license = "MIT"

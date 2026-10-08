@@ -4,6 +4,9 @@ x-backend: &backend
   build:
     context: .
     dockerfile: docker/backend.Dockerfile
+    args:
+      RAGAGENT_SOURCE_COMMIT: ${RAGAGENT_SOURCE_COMMIT:-unknown}
+      RAGAGENT_BUILD_TIME: ${RAGAGENT_BUILD_TIME:-unknown}
   env_file: .env
   environment:
     DATA_DIR: /data
@@ -11,8 +14,7 @@ x-backend: &backend
   volumes:
     - papers:/data
     - models:/models
-    - ./config:/app/config
-    - ./.git:/app/.git:ro
+    - config:/app/config
 services:
   db:
     image: pgvector/pgvector:0.8.2-pg17
@@ -88,3 +90,4 @@ volumes:
   redis:
   papers:
   models:
+  config:

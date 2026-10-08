@@ -879,3 +879,19 @@ Rust fmt/check/test/clippy locked, **9 passed, 0 ignored**; Linux native release
 build PASS (1m48s); Compose config PASS. Local Docker build/full health/ready
 NOT EXECUTED (VFS/32 GB quota); remote phase-specific CI pending. Windows system
 credential test is Windows-only and NOT EXECUTED locally; no actual model inference.
+
+
+## Engineering Phase 7 — Windows and artifact provenance (2026-10-08 Asia/Shanghai)
+
+Changed Windows CI/installer manifest, native build metadata/IPC, packaged backend
+identity and safe no-Git fallback, aligned Python/Web/Desktop version 0.2.0,
+nonroot backend and persistent writable config mount, bilingual docs and explicit
+upgrade ownership/import instructions. No DB/model/config volume deletion.
+
+Actual: Ruff format/lint/mypy 71 sources; uv lock + sync --locked; real PG/Redis
+**593 passed** (3 upstream warnings); npm ci/lint/type/build, **8 transport +
+29 Playwright**; Rust fmt/check/test/clippy locked **9 passed, 0 ignored**;
+Compose config PASS. Local full Docker image/health/ready NOT EXECUTED (VFS quota).
+Windows build is launched by publishing this phase; result/installer artifacts
+need separate actual evidence. Windows 11 human installation NOT EXECUTED;
+unsigned installers, no signing claim. Linux native release build PASS (1m33s).
