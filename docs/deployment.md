@@ -6,12 +6,12 @@ PyTorch to avoid an unnecessary CUDA runtime. ARM and offline operation require
 compatible model packages/weights; Docker smoke verification uses amd64.
 
 Until the stacked PRs are reviewed and merged, use
-[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations)
-for the conversation/desktop upgrade, including migration `0004` and `src-tauri`.
+[`fix/engineering-hardening`](https://github.com/chouytong/RAGAgent/tree/fix/engineering-hardening)
+for the conversation/desktop upgrade, including migration `0005` and `src-tauri`.
 It is based on the existing `phase-6-evaluation-deployment` RAG/Research baseline.
 
 ```bash
-git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
+git clone --branch fix/engineering-hardening https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
 # First checkout only; preserve an existing runtime .env.
 cp .env.example .env
@@ -20,9 +20,9 @@ docker compose up --build
 
 After merge, normal `git clone` uses main. Open http://localhost:8080 and API docs
 at http://localhost:8000/docs. Compose waits for DB/Redis health, runs Alembic and
-starts API, worker and frontend. DB/Redis are internal; exposed ports bind loopback.
+starts API, three dedicated workers and frontend. DB/Redis are internal; exposed ports bind loopback.
 API `/api/health` checks process liveness; `/api/ready` also checks PostgreSQL,
-Redis and a registered worker for the research queue. Compose's API healthcheck
+Redis and a registered worker for the interactive queue. Compose's API healthcheck
 uses `/api/ready`. Model downloads and successful inference are separate from
 infrastructure readiness.
 `docker compose down` preserves volumes. Removing volumes deletes your corpus;
@@ -161,14 +161,14 @@ database to add chat. Back up the local database/volumes and stop API/worker wri
 while applying an upgrade:
 
 ```bash
-docker compose stop api worker
-docker compose build api worker migrate frontend
+docker compose stop api worker-interactive worker-ingestion worker-evaluation
+docker compose build api worker-interactive worker-ingestion worker-evaluation migrate frontend
 docker compose run --rm migrate
 docker compose up -d
 ```
 
 For a host development database, `uv run alembic upgrade head` applies the same
-upgrade. The current head is `0004`. A downgrade from `0004` removes conversation
+upgrade. The current head is `0005`. A downgrade from `0004` removes conversation
 tables/data and associations; it is not a preservation mechanism for chat history.
 Previously selected legacy last-Run browser state is not converted into a made-up
 multi-turn conversation. Legacy Runs remain accessible through their existing API.
@@ -386,3 +386,35 @@ The optional overlay is not required for ordinary local Docker deployment.
 This release is a trusted local single-user application. Public/multi-tenant
 hosting, authorization, encrypted backups and automatic graph checkpoint resumption
 are outside v1; do not expose loopback ports publicly without implementing them.
+
+## Dedicated workload queues
+
+Compose starts `worker-interactive`, `worker-ingestion` and `worker-evaluation`.
+Each worker subscribes to exactly one queue, so a long evaluation cannot occupy
+an interactive worker. This does not reserve CPU/RAM/network on a shared host;
+provision those resources for model loading and the chosen concurrency.
+
+`INTERACTIVE_QUEUE`, `INGESTION_QUEUE` and `EVALUATION_QUEUE` optionally change
+queue names. Names must be distinct, valid lowercase identifiers and not the
+reserved legacy `research` name. A Run freezes its queue at durable dispatch,
+including retries of that dispatch; changing configuration cannot move accepted
+jobs silently. Drain old names before removing their workers.
+
+```bash
+# One foreground development worker per terminal.
+uv run python -m ragagent.worker --queue interactive
+uv run python -m ragagent.worker --queue ingestion
+uv run python -m ragagent.worker --queue evaluation
+# Scale only the required workload; each replica handles one job at a time.
+docker compose up -d --scale worker-interactive=2
+```
+
+`/api/ready` checks DB/Redis and a registered interactive worker. Read
+`/api/queues` to check ingestion/evaluation independently; a missing dedicated
+worker leaves its jobs queued until durable reconciliation's bound, then fails
+with a safe code rather than switching to another workload.
+
+For upgrades with pending jobs in the old `research` queue, stop new writes,
+keep the new workers and temporarily run `python -m ragagent.worker --queue legacy`
+with the same DB/Redis/settings. It consumes only already queued legacy jobs.
+Remove it after the legacy queue drains. Do not purge Redis or recreate the DB.

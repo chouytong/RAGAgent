@@ -20,6 +20,7 @@ from ragagent.domain.research import QueryPlan
 from ragagent.errors import ApplicationError
 from ragagent.evaluation.artifacts import usage_delta, usage_snapshot
 from ragagent.observability import configure_logging
+from ragagent.queues import queue_name
 
 app = FastAPI(title="Scientific RAGAgent", version="0.1.0", lifespan=dispatcher_lifespan)
 app.include_router(papers.router)
@@ -91,12 +92,34 @@ def ready(db: DB) -> dict[str, str]:
         db.execute(text("SELECT 1"))
         connection = RQQueue().connection()
         connection.ping()
-        workers = Worker.all(connection=connection, queue=Queue("research", connection=connection))
+        workers = Worker.all(
+            connection=connection, queue=Queue(queue_name("interactive"), connection=connection)
+        )
     except Exception:
         raise ApplicationError("infrastructure_unavailable") from None
     if not workers:
         raise ApplicationError("worker_unavailable")
     return {"status": "ready"}
+
+
+@app.get("/api/queues")
+def queues() -> dict[str, dict[str, str | int | bool]]:
+    """Report each workload separately; ready only gates interactive availability."""
+    try:
+        connection = RQQueue().connection()
+        result: dict[str, dict[str, str | int | bool]] = {}
+        for role in ("interactive", "ingestion", "evaluation"):
+            selected = Queue(queue_name(role), connection=connection)
+            registered = Worker.all(connection=connection, queue=selected)
+            result[role] = {
+                "name": selected.name,
+                "pending": selected.count,
+                "workers": len(registered),
+                "available": bool(registered),
+            }
+        return result
+    except Exception:
+        raise ApplicationError("infrastructure_unavailable") from None
 
 
 @app.post("/api/search", response_model=SearchResponse)

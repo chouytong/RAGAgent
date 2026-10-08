@@ -32,6 +32,13 @@ or local models. Local parsing/embedding/reranker weights download on first use.
 `/api/health` reports process liveness; `/api/ready` checks DB, Redis and a queue
 worker, without asserting model/provider inference readiness.
 
+RAG/Research conversation turns use the `interactive` queue; PDF/arXiv use
+`ingestion`; benchmarks use `evaluation`. Compose starts one dedicated worker
+per queue. `/api/ready` gates DB, Redis and interactive worker availability;
+`/api/queues` reports availability and pending counts for all three workloads.
+See [deployment](docs/deployment.md#dedicated-workload-queues) for scaling and
+migration of already queued jobs.
+
 ## Architecture
 
 ```mermaid

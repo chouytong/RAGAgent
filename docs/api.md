@@ -157,3 +157,8 @@ fetch. The Rust bridge accepts allowlisted relative API routes and validated
 payloads, targets only `http://127.0.0.1:8000`, and disables proxies/redirects.
 It does not forward renderer-supplied Host/Origin/Authorization or expose arbitrary
 network URLs. Web clients remain same-origin; no permissive CORS rule is added.
+
+`GET /api/queues` returns `interactive`, `ingestion` and `evaluation`, each with
+its configured name, pending count, registered worker count and availability.
+Infrastructure readiness requires an interactive worker; inference readiness is
+not implied. Queue routing is durable and frozen per accepted Run.

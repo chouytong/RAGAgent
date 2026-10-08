@@ -98,11 +98,28 @@ def test_readiness_requires_database_redis_and_registered_worker(
     assert (
         unavailable.status_code == 503 and unavailable.json()["error_code"] == "worker_unavailable"
     )
-    queue = Queue("research", connection=redis_connection)
+    queue = Queue("interactive", connection=redis_connection)
     rq_worker = Worker([queue], connection=redis_connection)
     rq_worker.register_birth()
     try:
         assert client.get("/api/ready").json() == {"status": "ready"}
+        workloads = client.get("/api/queues").json()
+        assert workloads["interactive"]["workers"] == 1
+        assert workloads["interactive"]["available"] is True
+        assert workloads["ingestion"]["available"] is False
+        assert workloads["evaluation"]["available"] is False
+        dedicated = [
+            Worker([Queue(name, connection=redis_connection)], connection=redis_connection)
+            for name in ("ingestion", "evaluation")
+        ]
+        for registered in dedicated:
+            registered.register_birth()
+        try:
+            assert all(item["available"] for item in client.get("/api/queues").json().values())
+        finally:
+            for registered in dedicated:
+                registered.register_death()
+                redis_connection.delete(registered.key)
     finally:
         rq_worker.register_death()
         redis_connection.delete(rq_worker.key)

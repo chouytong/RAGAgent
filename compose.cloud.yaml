@@ -16,7 +16,23 @@ services:
     environment:
       SSL_CERT_FILE: /run/proxy-ca.pem
       REQUESTS_CA_BUNDLE: /run/proxy-ca.pem
-  worker:
+  worker-interactive:
+    build:
+      secrets: [proxy_ca]
+    volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/run/proxy-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /run/proxy-ca.pem
+      REQUESTS_CA_BUNDLE: /run/proxy-ca.pem
+  worker-ingestion:
+    build:
+      secrets: [proxy_ca]
+    volumes:
+      - /etc/ssl/certs/ca-certificates.crt:/run/proxy-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /run/proxy-ca.pem
+      REQUESTS_CA_BUNDLE: /run/proxy-ca.pem
+  worker-evaluation:
     build:
       secrets: [proxy_ca]
     volumes:

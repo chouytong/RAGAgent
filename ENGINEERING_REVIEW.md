@@ -2,7 +2,7 @@
 
 日期：2026-10-07（UTC）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
 
-本报告是阶段记录。Phase 1–2 的实现和已执行检查如下；**Phase 3–8 均为 PENDING**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
+本报告是阶段记录。Phase 1–3 的实现和已执行检查如下；**Phase 4–8 均为 PENDING**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
 
 ## A. Initial Findings
 
@@ -40,7 +40,8 @@
 | Retry | metadata 记录重试，无 effective lineage | 新增 retry_of_message_id、attempt_number、is_effective；summary 排除过期 attempt | 已实现，迁移/回归见 C/J |
 | 删除 | 数据库 cascade，未撤销外部排队任务 | 删除 commit 后 best-effort queue cancel；late write guard 保留 | 已实现，race 回归见 J |
 | 消息与前端刷新 | 完整 Run 随所有消息重复序列化；活跃任务每 4 秒全历史刷新 | 标量 RunSummary 投影，最近 50/双向 ordinal cursor；SSE 为主，active placeholder 单条对账；Run/Evidence lazy load | Phase 2 已实现、Before/After 实测完成 |
-| 队列、Memory、认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 3–8 PENDING** |
+| 队列 | 固定 research queue，一个 worker | 固定路由到 interactive/ingestion/evaluation；三个独立 Compose worker，单角色 CLI | Phase 3 已实现，真实 RQ/PG occupancy probe 见 G |
+| Memory、认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 4–8 PENDING** |
 
 保留独立 RAG/Research Graph、PostgreSQL/pgvector、Redis/RQ、Knowledge Base、PDF/arXiv ingestion、SSE、Evaluation、Multi-provider、Tauri 和 Web fallback。没有从零重写或用大型基础设施替换现有组件。
 
@@ -114,7 +115,9 @@ Stored Memory 是本地显式 goal/constraint/term/preference/task；基线把�
 
 ## G. Queues
 
-当前仍是单个 research queue/worker（Phase 3 PENDING）。目标路由：interactive（RAG/Research/conversation）、ingestion（PDF/arXiv）、evaluation（评测）。保留 durable outbox、原子 Run claim、Redis 幂等与中断 reconciliation；readiness 必须分别验证实际队列 worker。只有分别运行 worker，不能仅给同一 worker 三个 queue 名称就宣称 Evaluation 不会阻塞交互。隔离运行实测 **Not measured**。
+`queues.py:freeze_queue` 按 Run kind 路由并冻结 `_queue_name`，原 outbox、幂等 job ID、claim 和 reconciliation 保留。`worker.py:main` 的 `--queue` 每次只选一个 workload，Compose 三个 worker 可分别扩容；配置拒绝同名队列。`api/app.py:queues` 分别报告三个 workload；ready 只保证 interactive 基础设施可用，不推断 ingestion/evaluation 或模型 readiness。
+
+真实 PG/Redis + 两个真实 RQ worker 的单次 occupancy probe：evaluation 在同步屏障上保持 running，interactive RAG 在 **111.697 ms** 完成并发布 scripted source citation，之后才释放 evaluation。原始记录与复跑命令见 `docs/benchmarks/queue-isolation.json`、`tests/integration/test_queue_isolation.py`。这是合成占用隔离检查，**不是模型性能/科学质量评测，不提供 p95 或容量推断**。共享主机 CPU/RAM 仍可能互相争用。已有 research 作业由临时 `--queue legacy` worker 排空，不能直接清空 Redis。
 
 ## H. Security
 
@@ -157,16 +160,16 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## K. Known Limitations
 
-- **Phase 3–8 未完成**；单队列、Memory 选择、Local API auth、Windows 工程化等仍需实施并重新测试。
+- **Phase 4–8 未完成**；Memory 选择、Local API auth、Windows 工程化等仍需实施并重新测试。
 - semantic verifier 是 model-based 检查，可能判断错误；source-grounded 名字与 exact substring 不等于科研结论正确，最终结论需人工复核。
 - summary 为有损 extractive；改写输入预算不是总费用上限。取消/删除不能撤回已经发出的远端请求或保证零费用。
-- Before/After 性能数据仅合成 API fixture；浏览器渲染、队列隔离和真实多语言检索质量尚未测量；不生成推断指标。
+- Before/After 性能数据仅合成 API fixture；浏览器渲染性能和真实多语言检索质量尚未测量；队列隔离仅有单次合成 probe；不生成推断指标。
 - 真正的 Windows 11、macOS packaging/signing、系统 PDF page navigation、实际模型 provider readiness 和模型权重许可/下载可达性需要对应平台、模型与数据验证。
 - 增量数据库迁移不应删除旧 conversation/message/Run/Memory/papers/evaluation；降级恢复策略以实际 Alembic 与备份检查为准。
 
 ## L. Future Work
 
-Phase 3–8 属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
+Phase 4–8 属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
 
 
 ### Phase 2 checks (2026-10-08 Asia/Shanghai)
@@ -190,3 +193,15 @@ Compose config、frontend 镜像 build PASS；backend 镜像重建与完整 heal
 **NOT EXECUTED**：已确认 VFS/32 GB 配额，只剩不足 2 GB，上一阶段创建后端容器已触发
 ENOSPC。这不是部署通过。Windows/真实模型科学验收仍 NOT EXECUTED。
 After benchmark 已在该 implementation commit 的独立数据库实跑，原始数据与范围见 D。
+
+
+### Phase 3 checks (2026-10-08 Asia/Shanghai)
+
+Ruff format/lint PASS，mypy 66 source files PASS，真实 PG/Redis 全量 **534 passed**
+（3 upstream warnings）。npm ci/lint/typecheck/build、**8 transport + 28 Playwright** PASS；
+Rust fmt/locked check/test/clippy **8 passed、0 ignored**。Compose config PASS。
+Docker backend build/full health/ready **NOT EXECUTED**（VFS/32 GB 配额，剩余不足 1 GB）；
+frontend 镜像沿用 Phase 2 已验证内容。Windows CI/真实模型验收仍 NOT EXECUTED。
+Linux Tauri 本阶段 build 状态另行记入阶段日志，未据打包推断产品窗口或 Windows 能力。
+
+Phase 3 Linux Tauri `npm run desktop:build`：PASS，实际 release 编译 1m21s；未测 Windows 或产品窗口。

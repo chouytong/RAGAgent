@@ -780,3 +780,25 @@ heavy Run-result SELECT 100 → 0; median 93.346 → 7.449 ms. The new latest-50
 older-page, one-row/empty incremental shapes are separately labeled. Before 270
 and after 630 raw samples are committed; these measure PG/ASGI API performance
 on explicit synthetic fixtures, not browser rendering or model retrieval quality.
+
+## Engineering hardening — Phase 3 (2026-10-08 Asia/Shanghai)
+
+Added shared durable queue routing, immutable per-Run queue names, validated
+queue settings and one-workload worker CLI. Compose/cloud CA overlay now runs
+independent interactive, ingestion and evaluation workers; scaling/legacy drain
+instructions and both READMEs updated. `/api/queues` reports each workload;
+`/api/ready` requires DB/Redis and interactive worker registration.
+
+Changed settings/queues/jobs, RQ transport, worker, API readiness/diagnostics,
+Compose/env/docs and real integration/unit tests. Real RQ/PG occupancy probe
+completed interactive scripted RAG while evaluation remained running, then
+released evaluation; single-trial raw result is explicitly synthetic, not a
+model quality or capacity benchmark.
+
+Ruff format/lint PASS, mypy 66 sources PASS, full Python real PG/Redis **534 passed**;
+frontend npm ci/lint/check/build, **8 transport / 28 Playwright** PASS;
+Rust fmt/locked check/test/clippy, **8 passed / 0 ignored**. Compose config PASS.
+Backend image build/full Compose health/ready NOT EXECUTED: VFS/32 GB quota,
+less than 1 GB available. Windows and real-model manual acceptance NOT EXECUTED.
+
+Phase 3 Linux Tauri `npm run desktop:build`：PASS，实际 release 编译 1m21s；未测 Windows 或产品窗口。

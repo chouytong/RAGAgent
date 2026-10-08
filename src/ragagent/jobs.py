@@ -11,6 +11,7 @@ from ragagent.db.dispatch import JobDispatch
 from ragagent.db.models import Conversation, ExecutionEvent, Message, Paper, Run
 from ragagent.domain.conversation import MessageStatus
 from ragagent.errors import ApplicationError
+from ragagent.queues import freeze_queue
 from ragagent.settings import get_settings
 
 TERMINAL_STATUSES = {"completed", "insufficient_evidence", "failed", "cancelled"}
@@ -87,9 +88,13 @@ def dispatch_run(session: Session, queue: DispatchQueue, run_id: str) -> bool:
         return False
     dispatch.attempts += 1
     timeout = freeze_job_timeout(run)
+    selected_queue = freeze_queue(run)
     try:
+        routed_submit = getattr(queue, "submit_for_run", None)
         timed_submit = getattr(queue, "submit_with_timeout", None)
-        if timed_submit is not None:
+        if routed_submit is not None:
+            routed_submit(run_id, selected_queue, timeout)
+        elif timed_submit is not None:
             timed_submit(run_id, timeout)
         else:
             queue.submit(run_id)

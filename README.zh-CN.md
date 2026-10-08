@@ -32,6 +32,11 @@ Rust 和各平台的 WebView 前置依赖列在
 `/api/health` 报告进程是否存活；`/api/ready` 检查数据库、Redis 和队列 worker，
 不代表模型或服务商已经具备推理条件。
 
+RAG/Research 会话使用 `interactive` 队列，PDF/arXiv 使用 `ingestion`，评测使用
+`evaluation`。Compose 分别启动三个独立 worker；`/api/ready` 检查交互服务所需
+数据库、Redis 和交互 worker，`/api/queues` 分别报告三个队列的可用性与待处理数。
+扩容及已有作业迁移见[部署文档](docs/deployment.md#dedicated-workload-queues)。
+
 ## 架构
 
 ```mermaid

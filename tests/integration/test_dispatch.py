@@ -29,7 +29,7 @@ def test_committed_outbox_recovers_lost_redis_ack_without_duplicate_job(
             raise ConnectionError("simulated acknowledgement loss")
 
     run = enqueue(empty_db, LostAcknowledgement(), "rag", {"query": "q"})
-    queue = Queue("research", connection=redis_connection)
+    queue = Queue("interactive", connection=redis_connection)
     try:
         dispatch = empty_db.get(JobDispatch, run.id)
         assert dispatch is not None and dispatch.dispatched_at is None

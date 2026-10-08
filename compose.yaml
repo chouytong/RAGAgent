@@ -54,9 +54,23 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
-  worker:
+  worker-interactive:
     <<: *backend
-    command: ["python", "-m", "ragagent.worker"]
+    command: ["python", "-m", "ragagent.worker", "--queue", "interactive"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  worker-ingestion:
+    <<: *backend
+    command: ["python", "-m", "ragagent.worker", "--queue", "ingestion"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  worker-evaluation:
+    <<: *backend
+    command: ["python", "-m", "ragagent.worker", "--queue", "evaluation"]
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
