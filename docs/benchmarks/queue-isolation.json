@@ -1,0 +1,23 @@
+{
+  "label": "SYNTHETIC QUEUE OCCUPANCY PROBE / NOT A SCIENTIFIC BENCHMARK",
+  "measured_date": "2026-10-08 Asia/Shanghai",
+  "test": "tests/integration/test_queue_isolation.py::test_running_evaluation_cannot_occupy_the_interactive_worker",
+  "script_sha256": "f72683a095cce49fdab251ebcbb42f4d0738d8cfb2069ea1105d7effaaa95675",
+  "database": "PostgreSQL 17.10 / pgvector 0.8.2",
+  "transport": "real Redis/RQ; dedicated forked workers",
+  "providers": "scripted MockProvider, scripted retrieval; no model inference",
+  "samples": [
+    {
+      "interactive_completion_ms": 111.697,
+      "evaluation_still_running_at_interactive_completion": true,
+      "interactive_status": "completed",
+      "evaluation_status_after_release": "completed"
+    }
+  ],
+  "limitations": [
+    "Single trial: no percentile or throughput inference",
+    "Shared host CPU/RAM/network not reserved",
+    "No real scientific quality or model latency measured"
+  ],
+  "reproduce": "Set isolated TEST_DATABASE_URL and TEST_REDIS_URL, then .venv/bin/pytest -q -s tests/integration/test_queue_isolation.py"
+}

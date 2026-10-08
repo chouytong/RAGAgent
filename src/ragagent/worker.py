@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import hashlib
 import logging
@@ -33,6 +34,7 @@ from ragagent.jobs import (
 )
 from ragagent.observability import configure_logging
 from ragagent.providers.chat import Usage, usage_record
+from ragagent.queues import QueueRole, queue_name
 from ragagent.retrieval.service import HybridRetriever
 from ragagent.runtime import make_agents, make_embedder, make_reranker
 from ragagent.settings import get_settings
@@ -420,9 +422,17 @@ def execute(run_id: str) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run a dedicated RAGAgent queue worker")
+    parser.add_argument(
+        "--queue",
+        choices=("interactive", "ingestion", "evaluation", "legacy"),
+        default="interactive",
+    )
+    args = parser.parse_args()
+    role: QueueRole = args.queue
     connection = Redis.from_url(get_settings().redis_url.get_secret_value())
     Worker(
-        [Queue("research", connection=connection)],
+        [Queue(queue_name(role), connection=connection)],
         connection=connection,
         work_horse_killed_handler=on_work_horse_killed,
     ).work()

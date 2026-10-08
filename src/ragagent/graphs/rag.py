@@ -32,7 +32,9 @@ def build_rag(
     async def plan(state: RAGState) -> RAGUpdate:
         result = await planner.complete(
             "Plan an internal scientific literature search. Identify question type and all "
-            "required aspects. Generate focused queries and metadata filters; do not answer.",
+            "required aspects. For comparisons, list the requested named candidates in "
+            "comparison_entities when known; compared entities may occur in one paper. "
+            "Generate focused queries and metadata filters; do not answer.",
             {"query": state.query, "filters": state.filters.model_dump()},
             QueryPlan,
         )
@@ -77,6 +79,7 @@ def build_rag(
             {
                 "query": state.query,
                 "required_aspects": state.query_plan.required_aspects,
+                "comparison_entities": state.query_plan.comparison_entities,
                 "evidence": [evidence_payload(e) for e in state.reranked_evidence],
             },
             AnswerDraft,
@@ -91,6 +94,8 @@ def build_rag(
             state.query_plan.required_aspects,
             reviewer,
             state.query,
+            comparison=state.query_plan.question_type == "comparison",
+            comparison_entities=state.query_plan.comparison_entities,
         )
         gate = evidence_gate(
             state.query_plan, state.reranked_evidence, validation, min_rerank_score

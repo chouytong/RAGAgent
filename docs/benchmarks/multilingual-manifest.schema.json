@@ -1,0 +1,469 @@
+{
+  "$defs": {
+    "BenchmarkChunk": {
+      "properties": {
+        "id": {
+          "pattern": "^[0-9a-f-]{36}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "paper_id": {
+          "pattern": "^[0-9a-f-]{36}$",
+          "title": "Paper Id",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "content": {
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "language": {
+          "enum": [
+            "en",
+            "zh"
+          ],
+          "title": "Language",
+          "type": "string"
+        },
+        "source_url": {
+          "pattern": "^https://",
+          "title": "Source Url",
+          "type": "string"
+        },
+        "source_version": {
+          "minLength": 1,
+          "title": "Source Version",
+          "type": "string"
+        },
+        "source_status": {
+          "enum": [
+            "active",
+            "unknown"
+          ],
+          "title": "Source Status",
+          "type": "string"
+        },
+        "license": {
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        },
+        "section": {
+          "minLength": 1,
+          "title": "Section",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "paper_id",
+        "title",
+        "content",
+        "language",
+        "source_url",
+        "source_version",
+        "source_status",
+        "license",
+        "section",
+        "page"
+      ],
+      "title": "BenchmarkChunk",
+      "type": "object"
+    },
+    "BilingualCase": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "query": {
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "question_type": {
+          "enum": [
+            "fact",
+            "comparison",
+            "synthesis",
+            "filter"
+          ],
+          "title": "Question Type",
+          "type": "string"
+        },
+        "filters": {
+          "$ref": "#/$defs/MetadataFilter"
+        },
+        "relevant_chunk_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relevant Chunk Ids",
+          "type": "array"
+        },
+        "relevant_paper_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relevant Paper Ids",
+          "type": "array"
+        },
+        "expected_answer": {
+          "title": "Expected Answer",
+          "type": "string"
+        },
+        "expected_refusal": {
+          "default": false,
+          "title": "Expected Refusal",
+          "type": "boolean"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "required_aspects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Aspects",
+          "type": "array"
+        },
+        "annotated_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotated By"
+        },
+        "annotated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotated At"
+        },
+        "query_language": {
+          "enum": [
+            "en",
+            "zh"
+          ],
+          "title": "Query Language",
+          "type": "string"
+        },
+        "paper_language": {
+          "enum": [
+            "en",
+            "zh"
+          ],
+          "title": "Paper Language",
+          "type": "string"
+        },
+        "translated_query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translated Query"
+        },
+        "translated_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translated By"
+        },
+        "translated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translated At"
+        }
+      },
+      "required": [
+        "id",
+        "query",
+        "question_type",
+        "expected_answer",
+        "query_language",
+        "paper_language"
+      ],
+      "title": "BilingualCase",
+      "type": "object"
+    },
+    "MatrixEntry": {
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "embedding": {
+          "$ref": "#/$defs/OfflineModel"
+        },
+        "reranker": {
+          "$ref": "#/$defs/OfflineModel"
+        },
+        "translate_zh_en": {
+          "default": false,
+          "title": "Translate Zh En",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "embedding",
+        "reranker"
+      ],
+      "title": "MatrixEntry",
+      "type": "object"
+    },
+    "MetadataFilter": {
+      "properties": {
+        "paper_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paper Ids",
+          "type": "array"
+        },
+        "authors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "year_start": {
+          "anyOf": [
+            {
+              "maximum": 2100,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year Start"
+        },
+        "year_end": {
+          "anyOf": [
+            {
+              "maximum": 2100,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year End"
+        },
+        "venues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Venues",
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sections",
+          "type": "array"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entity Types",
+          "type": "array"
+        },
+        "datasets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datasets",
+          "type": "array"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Methods",
+          "type": "array"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        }
+      },
+      "title": "MetadataFilter",
+      "type": "object"
+    },
+    "OfflineModel": {
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "directory": {
+          "format": "path",
+          "title": "Directory",
+          "type": "string"
+        },
+        "license_file": {
+          "format": "path",
+          "title": "License File",
+          "type": "string"
+        },
+        "license_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "License Sha256",
+          "type": "string"
+        },
+        "license_spdx": {
+          "enum": [
+            "MIT",
+            "Apache-2.0",
+            "BSD-2-Clause",
+            "BSD-3-Clause"
+          ],
+          "title": "License Spdx",
+          "type": "string"
+        },
+        "upstream_revision": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upstream Revision"
+        }
+      },
+      "required": [
+        "name",
+        "directory",
+        "license_file",
+        "license_sha256",
+        "license_spdx"
+      ],
+      "title": "OfflineModel",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "dataset_id": {
+      "minLength": 1,
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "annotation_version": {
+      "minLength": 1,
+      "title": "Annotation Version",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/BilingualCase"
+      },
+      "maxItems": 1000,
+      "minItems": 3,
+      "title": "Cases",
+      "type": "array"
+    },
+    "corpus": {
+      "items": {
+        "$ref": "#/$defs/BenchmarkChunk"
+      },
+      "maxItems": 10000,
+      "minItems": 1,
+      "title": "Corpus",
+      "type": "array"
+    },
+    "matrix": {
+      "items": {
+        "$ref": "#/$defs/MatrixEntry"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Matrix",
+      "type": "array"
+    },
+    "seed": {
+      "default": 0,
+      "title": "Seed",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "annotation_version",
+    "cases",
+    "corpus",
+    "matrix"
+  ],
+  "title": "MultilingualBenchmark",
+  "type": "object"
+}

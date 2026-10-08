@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from ragagent.api.schemas import HealthResult, ProviderTest
-from ragagent.errors import ApplicationError
+from ragagent.errors import ApplicationError, error_payload
 from ragagent.providers.chat import LiteLLMProvider, usage_record
 from ragagent.providers.config import ProviderConfig, load_config
 from ragagent.providers.environment import runtime_value
@@ -56,7 +56,7 @@ async def test(request: ProviderTest) -> JSONResponse:
         return JSONResponse(
             status_code=503,
             content={
-                "error_code": exc.code,
+                **error_payload(exc.code),
                 "usage": {"chat": usage_record(provider.usage)},
                 "usage_scope": "current_request",
             },

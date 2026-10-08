@@ -30,6 +30,7 @@ class QueryPlan(BaseModel):
     rerank_query: str | None = None
     question_type: Literal["fact", "comparison", "synthesis", "filter"] = "fact"
     required_aspects: list[str] = Field(default_factory=list, max_length=12)
+    comparison_entities: list[str] = Field(default_factory=list, max_length=12)
     filters: MetadataFilter = Field(default_factory=MetadataFilter)
 
 
@@ -91,6 +92,17 @@ class ClaimVerdict(BaseModel):
 class ClaimEvidencePair(BaseModel):
     claim_id: str
     evidence_id: str
+    # Optional offsets in original chunk Unicode code points, never generated quotes.
+    supporting_span_start: int | None = None
+    supporting_span_end: int | None = None
+
+
+class ComparisonEntityCoverage(BaseModel):
+    """Reviewer support for one canonical compared entity, never inferred from paper count."""
+
+    entity: str = Field(min_length=1, max_length=200)
+    supported: bool
+    supporting_pairs: list[ClaimEvidencePair] = Field(min_length=1, max_length=96)
 
 
 class CitationValidation(BaseModel):
@@ -99,6 +111,8 @@ class CitationValidation(BaseModel):
     supported_pairs: list[ClaimEvidencePair] = Field(default_factory=list)
     missing_citations: list[str] = Field(default_factory=list)
     missing_aspects: list[str] = Field(default_factory=list)
+    comparison_entities: list[ComparisonEntityCoverage] = Field(default_factory=list)
+    comparison_errors: list[str] = Field(default_factory=list)
 
 
 class Sufficiency(StrEnum):
@@ -125,6 +139,7 @@ class VerificationResponse(BaseModel):
     supported_pairs: list[ClaimEvidencePair]
     question_answered: bool = False
     missing_aspects: list[str] = Field(default_factory=list)
+    comparison_entities: list[ComparisonEntityCoverage] = Field(default_factory=list)
 
 
 class QueryExpansion(BaseModel):

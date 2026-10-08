@@ -8,6 +8,7 @@ from rq.job import Callback, Job
 
 from ragagent.errors import ApplicationError
 from ragagent.jobs import JOB_TIMEOUT_SECONDS
+from ragagent.queues import queue_name
 from ragagent.settings import get_settings
 
 
@@ -43,8 +44,11 @@ class RQQueue:
             return
 
     def submit_with_timeout(self, run_id: str, timeout: int) -> None:
+        self.submit_for_run(run_id, queue_name("interactive"), timeout)
+
+    def submit_for_run(self, run_id: str, selected_queue: str, timeout: int) -> None:
         try:
-            Queue("research", connection=self.connection()).enqueue(
+            Queue(selected_queue, connection=self.connection()).enqueue(
                 "ragagent.worker.execute",
                 run_id,
                 job_id=run_id,

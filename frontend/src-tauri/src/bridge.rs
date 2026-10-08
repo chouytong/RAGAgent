@@ -93,7 +93,19 @@ impl Pending {
 }
 
 pub fn client() -> Result<Client, String> {
+    client_with_token(None)
+}
+
+pub fn client_with_token(token: Option<&str>) -> Result<Client, String> {
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(token) = token {
+        let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|_| "local_auth_credential_invalid")?;
+        value.set_sensitive(true);
+        headers.insert(reqwest::header::AUTHORIZATION, value);
+    }
     Client::builder()
+        .default_headers(headers)
         .no_proxy()
         .redirect(Policy::none())
         .connect_timeout(Duration::from_secs(5))
@@ -124,13 +136,23 @@ fn api_path(path: &str) -> Result<(&str, Option<&str>), String> {
     }
     if let Some(query) = query {
         // Only pagination/cursors and the explicit workflow mode are accepted.
+        let mut cursor = None;
         if query.is_empty()
             || query.split('&').any(|entry| {
                 let Some((key, value)) = entry.split_once('=') else {
                     return true;
                 };
-                !((matches!(key, "after" | "limit" | "offset")
-                    && !value.is_empty()
+                if matches!(key, "after" | "offset" | "before_ordinal" | "after_ordinal") {
+                    // A request must choose one paging direction or legacy offset.
+                    // Duplicate cursors are ambiguous even when their values agree.
+                    if cursor.replace(key).is_some() {
+                        return true;
+                    }
+                }
+                !((matches!(
+                    key,
+                    "after" | "limit" | "offset" | "before_ordinal" | "after_ordinal"
+                ) && !value.is_empty()
                     && value.bytes().all(|b| b.is_ascii_digit()))
                     || (key == "mode" && matches!(value, "rag" | "research")))
             })
@@ -148,7 +170,9 @@ pub fn validate_request(path: &str, method: &str) -> Result<(), String> {
     }
     let parts: Vec<&str> = route.trim_start_matches('/').split('/').collect();
     let allowed = match parts.as_slice() {
-        ["api", "health" | "ready"] => method == "GET",
+        ["api", "health" | "ready" | "queues"] => method == "GET",
+        ["api", "auth", "status"] => method == "GET",
+        ["api", "diagnostics"] => method == "GET",
         ["api", "search"] | ["api", "rag", "query"] | ["api", "research"] => method == "POST",
         ["api", "providers"] => matches!(method, "GET" | "PUT"),
         ["api", "providers", "test"] => method == "POST",
@@ -168,8 +192,12 @@ pub fn validate_request(path: &str, method: &str) -> Result<(), String> {
         ["api", "conversations"] => matches!(method, "GET" | "POST"),
         ["api", "conversations", id] if uuid(id) => matches!(method, "GET" | "PATCH" | "DELETE"),
         ["api", "conversations", id, "messages"] if uuid(id) => matches!(method, "GET" | "POST"),
+        ["api", "conversations", id, "messages", message] if uuid(id) && uuid(message) => {
+            method == "GET"
+        }
         ["api", "conversations", id, "memory"] if uuid(id) => method == "DELETE",
         ["api", "conversations", id, "summary"] if uuid(id) => matches!(method, "GET" | "DELETE"),
+        ["api", "conversations", id, "state"] if uuid(id) => method == "GET",
         ["api", "conversations", id, "memories"] if uuid(id) => matches!(method, "GET" | "POST"),
         ["api", "conversations", id, "memories", item] if uuid(id) && uuid(item) => {
             method == "DELETE"
@@ -368,6 +396,9 @@ pub async fn events<F: Fn(StreamEvent) -> bool>(
                 .send()
                 .await
                 .map_err(|_| "local_backend_unavailable")?;
+            if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+                return Err("local_auth_required".into());
+            }
             if !response.status().is_success()
                 || !response
                     .headers()
@@ -401,7 +432,11 @@ pub async fn events<F: Fn(StreamEvent) -> bool>(
             Ok(true) => return Ok(()),
             Ok(false) => {}
             Err(code) => {
+                let auth_required = code == "local_auth_required";
                 if !send(StreamEvent::Error { data: code }) {
+                    return Ok(());
+                }
+                if auth_required {
                     return Ok(());
                 }
             }
@@ -479,6 +514,52 @@ mod tests {
         assert!(validate_request(&format!("/api/runs/{ID}/events"), "GET").is_err());
         assert!(validate_request("/api/conversations?limit=20&offset=0", "GET").is_ok());
         assert!(validate_request("/api/conversations?mode=research", "GET").is_ok());
+    }
+    #[test]
+    fn message_cursors_and_reconciliation_remain_scoped() {
+        let messages = format!("/api/conversations/{ID}/messages");
+        for query in [
+            "limit=20&offset=0",
+            "limit=20&before_ordinal=25",
+            "after_ordinal=24&limit=20",
+            "after_ordinal=0",
+        ] {
+            assert!(
+                validate_request(&format!("{messages}?{query}"), "GET").is_ok(),
+                "{query}"
+            );
+        }
+        for query in [
+            "before_ordinal=25&after_ordinal=24",
+            "after_ordinal=24&offset=0",
+            "after=24&before_ordinal=25",
+            "after_ordinal=24&after_ordinal=24",
+            "before_ordinal=-1",
+            "after_ordinal=",
+            "after_ordinal=24.5",
+            "after_ordinal=24?next=http://evil",
+            "after_message_id=untrusted",
+        ] {
+            assert!(
+                validate_request(&format!("{messages}?{query}"), "GET").is_err(),
+                "{query}"
+            );
+        }
+        assert!(validate_request(&format!("{messages}?after_ordinal=24"), "POST").is_err());
+        let message = format!("{messages}/{ID}");
+        assert!(validate_request(&message, "GET").is_ok());
+        for method in ["POST", "PUT", "PATCH", "DELETE"] {
+            assert!(validate_request(&message, method).is_err(), "{method}");
+        }
+        for path in [
+            format!("{messages}/not-a-uuid"),
+            format!("/api/conversations/not-a-uuid/messages/{ID}"),
+            format!("{message}/details"),
+            format!("{message}/../providers"),
+        ] {
+            assert!(validate_request(&path, "GET").is_err(), "{path}");
+        }
+        assert!(validate_request(&format!("{message}/retry"), "POST").is_ok());
     }
     #[test]
     fn documents_do_not_allow_arbitrary_destinations() {

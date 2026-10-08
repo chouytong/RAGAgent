@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -9,9 +10,10 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from httpx import Headers
 from redis import Redis
 from rq.job import Job
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -29,9 +31,16 @@ from ragagent.db.models import (
     Message,
     Run,
 )
-from ragagent.domain.conversation import ConversationCreate, MessageCreate
+from ragagent.domain.conversation import ConversationCreate, MessageCreate, RetryMessage
 from ragagent.errors import ApplicationError
-from ragagent.jobs import cancel_run, claim_run, ensure_running, fail_run, finish_run
+from ragagent.jobs import (
+    cancel_run,
+    claim_run,
+    ensure_running,
+    fail_run,
+    finish_run,
+    reconcile_jobs,
+)
 from ragagent.providers.chat import Usage
 
 
@@ -43,8 +52,133 @@ class RecordingQueue:
         self.ids.append(run_id)
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize("count", [10, 50, 100])
+def test_message_windows_do_not_load_heavy_run_results(
+    conversation_client: TestClient, empty_db: Session, count: int
+) -> None:
+    client = conversation_client
+    cid = create(client)
+    run = Run(
+        conversation_id=cid,
+        kind="rag",
+        status="completed",
+        request={"query": "Synthetic performance test"},
+        result={"large": "private fixture" * 100000},
+    )
+    empty_db.add(run)
+    empty_db.flush()
+    rows = [
+        Message(
+            conversation_id=cid,
+            role="user",
+            content=f"Fixture {i}",
+            ordinal=i,
+            run_id=run.id,
+            status="completed",
+        )
+        for i in range(count)
+    ]
+    empty_db.add_all(rows)
+    empty_db.commit()
+    statements: list[str] = []
+
+    def capture(
+        _connection: Any, _cursor: Any, statement: str, _parameters: Any, _context: Any, _many: Any
+    ) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    bind = empty_db.get_bind()
+    event.listen(bind, "before_cursor_execute", capture)
+    try:
+        response = client.get(f"/api/conversations/{cid}/messages")
+    finally:
+        event.remove(bind, "before_cursor_execute", capture)
+    assert response.status_code == 200
+    assert [row["ordinal"] for row in response.json()] == list(range(max(0, count - 50), count))
+    assert len(statements) == 2
+    assert all(
+        "runs.result" not in statement and "runs.request" not in statement
+        for statement in statements
+    )
+    assert all("result" not in row["run"] for row in response.json())
+    assert len(response.content) < 60000
+    assert client.get(f"/api/runs/{run.id}").json()["result"] == run.result
+    latest = rows[-1]
+    single = client.get(f"/api/conversations/{cid}/messages/{latest.id}").json()
+    assert single["id"] == latest.id and "result" not in single["run"]
+
+
+@pytest.mark.integration
+def test_message_cursors_preserve_history_and_detect_same_ordinal_updates(
+    conversation_client: TestClient, empty_db: Session
+) -> None:
+    client = conversation_client
+    cid = create(client)
+    empty_db.add_all(
+        [
+            Message(
+                conversation_id=cid,
+                role="user",
+                content=f"Fixture {i}",
+                ordinal=i,
+                status="completed",
+            )
+            for i in range(120)
+        ]
+    )
+    empty_db.commit()
+    base = f"/api/conversations/{cid}/messages"
+    assert [
+        row["ordinal"] for row in client.get(base + "?limit=50&before_ordinal=70").json()
+    ] == list(range(20, 70))
+    assert [
+        row["ordinal"] for row in client.get(base + "?limit=12&after_ordinal=69").json()
+    ] == list(range(70, 82))
+    assert [row["ordinal"] for row in client.get(base + "?limit=3&offset=0").json()] == [0, 1, 2]
+    assert client.get(base + "?after_ordinal=119").json() == []
+    turn = send(client, cid, "New query")
+    assistant = turn["assistant_message"]
+    assert [row["ordinal"] for row in client.get(base + "?after_ordinal=119").json()] == [120, 121]
+    current = claim_run(empty_db, turn["run"]["id"])
+    assert current is not None
+    current.result, current.status = {"answer": "A final persisted answer."}, "completed"
+    finish_run(empty_db, current)
+    assert client.get(base + "?after_ordinal=121").json() == []
+    updated = client.get(base + f"/{assistant['id']}").json()
+    assert updated["ordinal"] == 121 and updated["status"] == "completed"
+    assert updated["content"] == "A final persisted answer."
+    assert "result" not in updated["run"]
+    assert (
+        client.get(f"/api/conversations/{create(client)}/messages/{assistant['id']}").status_code
+        == 404
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "query",
+    [
+        "before_ordinal=3&after_ordinal=2",
+        "offset=0&after_ordinal=2",
+        "offset=0&before_ordinal=3",
+        "after_ordinal=-1",
+        "before_ordinal=2147483648",
+        "after_ordinal=1&after_ordinal=2",
+    ],
+)
+def test_invalid_message_cursor_combinations_are_rejected(
+    conversation_client: TestClient, query: str
+) -> None:
+    cid = create(conversation_client)
+    assert conversation_client.get(f"/api/conversations/{cid}/messages?{query}").status_code == 422
+
+
 @pytest.fixture
-def conversation_client(empty_db: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def conversation_client(
+    empty_db: Session, monkeypatch: pytest.MonkeyPatch, auth_headers: Headers
+) -> Iterator[TestClient]:
     empty_db.execute(delete(Conversation))
     empty_db.commit()
 
@@ -54,7 +188,7 @@ def conversation_client(empty_db: Session, monkeypatch: pytest.MonkeyPatch) -> I
     monkeypatch.setattr("ragagent.api.dispatcher.reconcile", lambda: None)
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_queue] = RecordingQueue
-    with TestClient(app) as client:
+    with TestClient(app, headers=auth_headers) as client:
         yield client
     app.dependency_overrides.clear()
 
@@ -173,9 +307,13 @@ def test_failure_retry_keeps_original_turn_and_replays_idempotently(
     assert retry.json()["user_message"]["id"] == turn["user_message"]["id"]
     assert retry.json()["assistant_message"]["id"] != original.id
     assert retry.json()["assistant_message"]["ordinal"] == 2
+    assert retry.json()["assistant_message"]["retry_of_message_id"] == original.id
+    assert retry.json()["assistant_message"]["attempt_number"] == 2
+    assert retry.json()["assistant_message"]["is_effective"] is True
     assert retry.json()["run"]["id"] != turn["run"]["id"]
     assert client.post(path, json=body).json()["run"]["id"] == retry.json()["run"]["id"]
     assert empty_db.get(Message, original.id).run_id == turn["run"]["id"]
+    assert empty_db.get(Message, original.id).is_effective is False
     assert (
         client.get(f"/api/conversations/{conversation_id}/messages").json()[0]["run_id"]
         == turn["run"]["id"]
@@ -362,7 +500,9 @@ def test_sse_reconnect_and_restart_read_persisted_assistant(
     assert (
         restored["status"] == "completed" and restored["content"] == "Verified datasets [E:fixture]"
     )
-    assert restored["run"]["result"]["answer"] == restored["content"]
+    assert "result" not in restored["run"]
+    full_run = conversation_client.get(f"/api/runs/{restored['run_id']}").json()
+    assert full_run["result"]["answer"] == restored["content"]
 
 
 @pytest.mark.integration
@@ -592,3 +732,332 @@ def test_billed_response_after_cancel_is_recorded_without_authorizing_new_calls(
             adapter.usage.on_update = None
             session.execute(delete(Conversation).where(Conversation.id == conversation_id))
             session.commit()
+
+
+@pytest.mark.integration
+def test_retry_chain_preserves_every_attempt_and_only_latest_is_effective(
+    conversation_client: TestClient, empty_db: Session
+) -> None:
+    conversation_id = create(conversation_client)
+    first = send(conversation_client, conversation_id)
+    run = claim_run(empty_db, first["run"]["id"])
+    assert run is not None
+    run.status = "insufficient_evidence"
+    finish_run(empty_db, run)
+    path = f"/api/conversations/{conversation_id}/messages"
+    second = conversation_client.post(
+        path + f"/{first['assistant_message']['id']}/retry",
+        json={"client_request_id": str(uuid4())},
+    ).json()
+    fail_run(empty_db, second["run"]["id"], "provider_unavailable")
+    third_response = conversation_client.post(
+        path + f"/{second['assistant_message']['id']}/retry",
+        json={"client_request_id": str(uuid4())},
+    )
+    assert third_response.status_code == 202, third_response.text
+    third = third_response.json()
+    run = claim_run(empty_db, third["run"]["id"])
+    assert run is not None
+    run.status, run.result = "completed", {"answer": "Fresh source-checked answer"}
+    finish_run(empty_db, run)
+    attempts = [
+        message
+        for message in conversation_client.get(path).json()
+        if message["role"] == "assistant"
+    ]
+    assert [message["attempt_number"] for message in attempts] == [1, 2, 3]
+    assert [message["is_effective"] for message in attempts] == [False, False, True]
+    assert [message["retry_of_message_id"] for message in attempts] == [
+        None,
+        first["assistant_message"]["id"],
+        second["assistant_message"]["id"],
+    ]
+    assert [message["status"] for message in attempts] == [
+        "insufficient_evidence",
+        "failed",
+        "completed",
+    ]
+    assert (
+        empty_db.scalar(
+            select(func.count()).select_from(Run).where(Run.conversation_id == conversation_id)
+        )
+        == 3
+    )
+
+
+@pytest.mark.integration
+def test_retry_commit_failure_restores_original_effective_attempt(
+    conversation_client: TestClient, empty_db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conversation_id = create(conversation_client)
+    first = send(conversation_client, conversation_id)
+    fail_run(empty_db, first["run"]["id"], "provider_unavailable")
+
+    def rejected_commit() -> None:
+        raise RuntimeError("synthetic retry commit failure")
+
+    monkeypatch.setattr(empty_db, "commit", rejected_commit)
+    response = conversation_client.post(
+        f"/api/conversations/{conversation_id}/messages/{first['assistant_message']['id']}/retry",
+        json={"client_request_id": str(uuid4())},
+    )
+    assert response.status_code == 500
+    original = empty_db.get(Message, first["assistant_message"]["id"])
+    assert original is not None and original.is_effective is True
+    assert (
+        empty_db.scalar(
+            select(func.count())
+            .select_from(Message)
+            .where(Message.conversation_id == conversation_id)
+        )
+        == 2
+    )
+    assert (
+        empty_db.scalar(
+            select(func.count()).select_from(Run).where(Run.conversation_id == conversation_id)
+        )
+        == 1
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("same_key", [True, False])
+def test_concurrent_retry_is_idempotent_or_rejects_a_second_attempt(
+    job_sessions: sessionmaker[Session], same_key: bool
+) -> None:
+    class InspectableRecordingQueue(RecordingQueue):
+        def status(self, run_id: str) -> str | None:
+            return "queued" if run_id in self.ids else None
+
+    queue = InspectableRecordingQueue()
+    with job_sessions() as session:
+        conversation_id = conversations.create_conversation(ConversationCreate(), session).id
+        turn = conversations.send_message(
+            conversation_id, MessageCreate(content="q", client_request_id=uuid4()), session, queue
+        )
+        fail_run(session, turn.run.id, "provider_unavailable")
+    queue.ids.clear()
+    keys = [uuid4(), uuid4()]
+    if same_key:
+        keys[1] = keys[0]
+    barrier = Barrier(2)
+
+    def retry(index: int) -> tuple[int, str]:
+        with job_sessions() as session:
+            barrier.wait(timeout=10)
+            try:
+                result = conversations.retry_message(
+                    conversation_id,
+                    turn.assistant_message.id,
+                    RetryMessage(client_request_id=keys[index]),
+                    session,
+                    queue,
+                )
+                return 202, result.run.id
+            except HTTPException as exc:
+                session.rollback()
+                return exc.status_code, str(exc.detail)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(retry, range(2)))
+        if same_key:
+            assert results[0] == results[1] and results[0][0] == 202
+        else:
+            assert sorted(result[0] for result in results) == [202, 409]
+        with job_sessions() as session:
+            attempts = list(
+                session.scalars(
+                    select(Message)
+                    .where(Message.conversation_id == conversation_id, Message.role == "assistant")
+                    .order_by(Message.ordinal)
+                )
+            )
+            assert len(attempts) == 2
+            assert [message.is_effective for message in attempts] == [False, True]
+            assert [message.attempt_number for message in attempts] == [1, 2]
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(Run)
+                    .where(Run.conversation_id == conversation_id)
+                )
+                == 2
+            )
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(JobDispatch)
+                    .join(Run)
+                    .where(Run.conversation_id == conversation_id)
+                )
+                == 2
+            )
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(Run)
+                    .where(Run.conversation_id == conversation_id, Run.status == "queued")
+                )
+                == 1
+            )
+            # The losing request can briefly hold the Conversation lock while
+            # the winning request performs its nonblocking immediate dispatch.
+            # In that schedule the durable outbox is intentionally dispatched
+            # by reconciliation, rather than waiting inside the API request.
+            reconcile_jobs(session, queue)
+            assert queue.ids == [attempts[-1].run_id]
+            assert session.get(JobDispatch, attempts[-1].run_id).dispatched_at is not None
+            reconcile_jobs(session, queue)
+            assert queue.ids == [attempts[-1].run_id]
+    finally:
+        with job_sessions() as session:
+            session.execute(delete(Conversation).where(Conversation.id == conversation_id))
+            session.commit()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("queue_fails", [False, True])
+def test_delete_revokes_ownership_and_commits_before_best_effort_queue_stop(
+    job_sessions: sessionmaker[Session], queue_fails: bool
+) -> None:
+    class StopQueue(RecordingQueue):
+        def __init__(self) -> None:
+            super().__init__()
+            self.stopped: list[str] = []
+
+        def cancel(self, run_id: str) -> None:
+            # Another connection observes the hard delete already committed;
+            # Redis/network work does not hold Conversation or Run row locks.
+            with job_sessions() as observer:
+                assert observer.get(Run, run_id) is None
+                assert observer.get(Conversation, conversation_id) is None
+            self.stopped.append(run_id)
+            if queue_fails:
+                raise ConnectionError("synthetic Redis outage")
+
+    queue = StopQueue()
+    with job_sessions() as session:
+        conversation_id = conversations.create_conversation(ConversationCreate(), session).id
+        turn = conversations.send_message(
+            conversation_id, MessageCreate(content="q", client_request_id=uuid4()), session, queue
+        )
+        run = claim_run(session, turn.run.id)
+        assert run is not None
+        assert conversations.delete_conversation(conversation_id, session, queue) == {
+            "status": "deleted"
+        }
+        assert queue.stopped == [turn.run.id]
+        with pytest.raises(ApplicationError, match="run_no_longer_active"):
+            ensure_running(session, run)
+        session.rollback()
+        assert session.get(Message, turn.assistant_message.id) is None
+
+
+@pytest.mark.integration
+def test_real_rq_delete_cancels_queued_job_and_prevents_worker_claim(
+    conversation_client: TestClient,
+    empty_db: Session,
+    redis_connection: Redis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    queue = RQQueue()
+    monkeypatch.setattr(queue, "connection", lambda: redis_connection)
+    app.dependency_overrides[get_queue] = lambda: queue
+    conversation_id = create(conversation_client)
+    turn = send(conversation_client, conversation_id)
+    job = Job.fetch(turn["run"]["id"], connection=redis_connection)
+    try:
+        assert job.get_status(refresh=True).value == "queued"
+        response = conversation_client.delete(f"/api/conversations/{conversation_id}")
+        assert response.status_code == 200
+        assert job.get_status(refresh=True).value == "canceled"
+        assert claim_run(empty_db, job.id) is None
+        assert empty_db.get(Message, turn["assistant_message"]["id"]) is None
+    finally:
+        job.delete(remove_from_queue=True)
+
+
+@pytest.mark.integration
+def test_concurrent_delete_and_completion_cannot_recreate_messages(
+    job_sessions: sessionmaker[Session],
+) -> None:
+    queue = RecordingQueue()
+    with job_sessions() as session:
+        conversation_id = conversations.create_conversation(ConversationCreate(), session).id
+        turn = conversations.send_message(
+            conversation_id, MessageCreate(content="q", client_request_id=uuid4()), session, queue
+        )
+        assert claim_run(session, turn.run.id) is not None
+    barrier = Barrier(2)
+
+    def complete() -> str:
+        with job_sessions() as session:
+            run = session.get(Run, turn.run.id)
+            assert run is not None
+            barrier.wait(timeout=10)
+            run.status, run.result = "completed", {"answer": "Current evidence answer"}
+            try:
+                finish_run(session, run)
+                return "completed"
+            except ApplicationError as exc:
+                session.rollback()
+                assert exc.code == "run_no_longer_active"
+                return "revoked"
+
+    def remove() -> dict[str, str]:
+        with job_sessions() as session:
+            barrier.wait(timeout=10)
+            return conversations.delete_conversation(conversation_id, session, queue)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        completed, removed = executor.submit(complete), executor.submit(remove)
+        assert completed.result(timeout=20) in {"completed", "revoked"}
+        assert removed.result(timeout=20) == {"status": "deleted"}
+    with job_sessions() as session:
+        assert session.get(Conversation, conversation_id) is None
+        assert session.get(Run, turn.run.id) is None
+        assert session.get(Message, turn.assistant_message.id) is None
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "mutation", ["clear", "summary", "memory", "delete", "remove_one", "add_one"]
+)
+def test_intent_state_is_removed_with_its_context_sources(
+    conversation_client: TestClient, empty_db: Session, mutation: str
+) -> None:
+    from ragagent.db.models import ConversationStateRecord
+    from ragagent.domain.conversation_context import ConversationState
+
+    client = conversation_client
+    cid = create(client)
+    path = f"/api/conversations/{cid}"
+    memory = client.post(path + "/memories", json={"kind": "term", "content": "DANN"}).json()
+    empty_db.add(
+        ConversationStateRecord(
+            conversation_id=cid,
+            through_ordinal=0,
+            version=1,
+            content=ConversationState(through_ordinal=0).model_dump(),
+        )
+    )
+    empty_db.commit()
+    state = client.get(path + "/state")
+    assert state.status_code == 200 and state.json()["scientific_evidence"] is False
+    if mutation == "clear":
+        response = client.post(path + "/clear")
+    elif mutation == "delete":
+        response = client.delete(path)
+    elif mutation == "remove_one":
+        response = client.delete(path + "/memories/" + memory["id"])
+    elif mutation == "add_one":
+        response = client.post(
+            path + "/memories", json={"kind": "goal", "content": "Compare methods"}
+        )
+    else:
+        response = client.delete(path + "/" + mutation)
+    assert response.is_success
+    empty_db.expire_all()
+    assert empty_db.get(ConversationStateRecord, cid) is None
+    assert client.get(path + "/state").status_code == (404 if mutation == "delete" else 200)

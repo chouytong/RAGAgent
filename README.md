@@ -8,29 +8,42 @@ evidence-grounded knowledge base and Supervisor workflows. MIT licensed; paper a
 independent. No langgraph-supervisor dependency. No fabricated benchmark claims.
 
 The conversation/desktop upgrade is published on
-[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations),
+[`fix/engineering-hardening`](https://github.com/chouytong/RAGAgent/tree/fix/engineering-hardening),
 stacked on the existing `phase-6-evaluation-deployment` RAG/Research baseline.
 Use this review branch until the PRs are reviewed and merged.
 
 ```bash
-git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
+git clone --branch fix/engineering-hardening https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
 # First checkout only; preserve an existing runtime .env.
 cp .env.example .env
+# Install/start Desktop first and open Connection authorization.
+npm --prefix frontend ci
+npm --prefix frontend run desktop:dev
+# Copy its nonsecret pairing hash into LOCAL_AUTH_TOKEN_HASH in .env.
+# Then start Compose in another terminal and reconnect Desktop.
 docker compose up --build
 ```
 
-Open the [Web fallback](http://localhost:8080) and [API docs](http://localhost:8000/docs).
-For an independent application window, start the local backend with Compose and
-run `npm --prefix frontend ci` followed by `npm --prefix frontend run desktop:dev`.
+Open the [Web fallback](http://localhost:8080) using the optional development authorization
+described in [local pairing](docs/deployment.md#local-owner-authentication).
+[API docs](http://localhost:8000/docs) require a bearer for protected requests.
+For an independent window, pair Desktop first as above, then start Compose.
 The desktop shell connects only to `http://127.0.0.1:8000`; it does not bundle or
 start Python, PostgreSQL or Redis. Rust and platform WebView prerequisites are
 listed in [deployment](docs/deployment.md#desktop-ui-with-local-backend).
 Requires Docker Compose v2, Git, recommended 8 GB RAM and 20 GB free disk.
-The system starts without API keys; inference requires configured chat providers
+The backend requires local authorization configuration; model API keys are optional for startup; inference requires configured chat providers
 or local models. Local parsing/embedding/reranker weights download on first use.
 `/api/health` reports process liveness; `/api/ready` checks DB, Redis and a queue
 worker, without asserting model/provider inference readiness.
+
+RAG/Research conversation turns use the `interactive` queue; PDF/arXiv use
+`ingestion`; benchmarks use `evaluation`. Compose starts one dedicated worker
+per queue. `/api/ready` gates DB, Redis and interactive worker availability;
+`/api/queues` reports availability and pending counts for all three workloads.
+See [deployment](docs/deployment.md#dedicated-workload-queues) for scaling and
+migration of already queued jobs.
 
 ## Architecture
 
@@ -74,6 +87,12 @@ Reviewer Result and limitations. Reloading the Web UI or restarting the desktop
 reads conversations and messages from PostgreSQL; browser `localStorage` is not
 the conversation store. A URL fragment identifies the selected conversation.
 
+The UI initially reads the latest 50 lightweight messages and loads older history
+on request. SSE drives live progress; reconnect/resume reconciles new messages and
+active placeholders. Run, trace and evidence details load when opened, rather than
+with every history refresh. Superseded retry attempts remain audit records and
+leave the context used for subsequent questions.
+
 Each turn creates messages and an existing Run/durable dispatch intent together.
 The worker persists the released assistant answer with the terminal Run/event;
 SSE reconnects replay persisted execution events. Duplicate submissions use a
@@ -87,8 +106,12 @@ messages, a deterministic rolling extractive summary and explicitly added memori
 resolve pronouns/named candidates into a standalone question. The original and
 contextualized query are inspectable in execution details. Older excerpts may
 lose information; ambiguous references fail explicitly instead of guessing.
-`CONVERSATION_CONTEXT_TOKEN_BUDGET=8192` uses a conservative UTF-8 byte estimate
-for contextualization input, not a provider tokenizer or a total workflow budget.
+`CONVERSATION_CONTEXT_TOKEN_BUDGET=8192` uses a multilingual approximate token estimate with UTF-8 excerpt caps
+for contextualization input; this is not a provider tokenizer or a total workflow budget.
+Independent questions skip the rewrite model. Context-dependent questions use selected
+Top-K memory text; all structured hard filters still apply. A typed, source-linked
+conversation intent/entity state survives restart beside the extractive summary.
+The Memory panel exposes this state; changing memory invalidates it.
 
 **Memory ≠ Evidence.** Messages, summaries and memories only guide intent and
 retrieval. Both independent graphs retrieve fresh source evidence and retain the
@@ -325,3 +348,18 @@ The baseline and ADRs were written during the engineering repair; they are not
 recovered historical specifications or prior acceptance evidence. The stage log
 separates actual checks from real PDF/model/provider/benchmark validation that
 remains unverified.
+
+Multilingual model adoption remains unverified: the [real-model matrix](docs/benchmarks/multilingual.md) records current/candidate/translation configurations with **Not measured** metrics until approved human gold and licensed immutable weights are supplied. CI scripted providers do not establish retrieval quality. Defaults are unchanged.
+
+Windows MSI/NSIS artifacts are built by the [Desktop workflow](.github/workflows/desktop.yml); use only successful-run artifacts and verify hashes. See [Windows installation and limitations](docs/deployment.md#windows-installers-and-build-provenance). Builds are unsigned; Windows 11 human acceptance remains separate.
+
+Completed answers are labeled **Passed automated evidence validation**; this
+checks evidence links and model-based support and does not guarantee scientific
+truth. Claim supporting spans use validated original text offsets, with the full
+original quote retained as fallback. PDF panels show the requested page; native
+viewers may require manual navigation. In Settings, **本机诊断与版本** separates
+authorization, database, Redis, workload queues and build provenance from
+model loading/inference, which remains untested until actual tasks run.
+See [engineering evidence and unverified acceptance](ENGINEERING_REVIEW.md).
+
+Validated implementation `f803d824`: backend/frontend/Compose and Linux/Windows Desktop CI passed. Actual unsigned MSI/NSIS artifacts and independently checked SHA-256 are linked in [the engineering report](ENGINEERING_REVIEW.md#final-implementation-ci-and-inspected-windows-artifacts). Real multilingual quality and Windows 11 human acceptance remain unverified.

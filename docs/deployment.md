@@ -6,23 +6,27 @@ PyTorch to avoid an unnecessary CUDA runtime. ARM and offline operation require
 compatible model packages/weights; Docker smoke verification uses amd64.
 
 Until the stacked PRs are reviewed and merged, use
-[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations)
-for the conversation/desktop upgrade, including migration `0004` and `src-tauri`.
+[`fix/engineering-hardening`](https://github.com/chouytong/RAGAgent/tree/fix/engineering-hardening)
+for the conversation/desktop upgrade, including migration `0006` and `src-tauri`.
 It is based on the existing `phase-6-evaluation-deployment` RAG/Research baseline.
 
 ```bash
-git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
+git clone --branch fix/engineering-hardening https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
 # First checkout only; preserve an existing runtime .env.
 cp .env.example .env
+# First start Desktop and copy its pairing hash into LOCAL_AUTH_TOKEN_HASH.
+npm --prefix frontend ci
+npm --prefix frontend run desktop:dev
+# In another terminal, after pairing:
 docker compose up --build
 ```
 
 After merge, normal `git clone` uses main. Open http://localhost:8080 and API docs
 at http://localhost:8000/docs. Compose waits for DB/Redis health, runs Alembic and
-starts API, worker and frontend. DB/Redis are internal; exposed ports bind loopback.
+starts API, three dedicated workers and frontend. DB/Redis are internal; exposed ports bind loopback.
 API `/api/health` checks process liveness; `/api/ready` also checks PostgreSQL,
-Redis and a registered worker for the research queue. Compose's API healthcheck
+Redis and a registered worker for the interactive queue. Compose's API healthcheck
 uses `/api/ready`. Model downloads and successful inference are separate from
 infrastructure readiness.
 `docker compose down` preserves volumes. Removing volumes deletes your corpus;
@@ -47,7 +51,7 @@ The API rejects foreign/invalid Host headers. Browser write requests carrying
 Origin must match the request's scheme, local hostname and port. Command-line
 requests without Origin remain supported. Bundled nginx and Vite preserve Host
 so same-origin requests through their proxy pass this check; nginx rejects foreign
-hosts. This is local browser protection, not authentication for shared deployment.
+hosts. Local owner authentication is also required; see below. Public multi-user deployment requires a separate threat model and access control.
 
 Local commands read provider model variables and keys from the process
 environment first, then `.env`; an explicitly empty process variable overrides
@@ -161,14 +165,14 @@ database to add chat. Back up the local database/volumes and stop API/worker wri
 while applying an upgrade:
 
 ```bash
-docker compose stop api worker
-docker compose build api worker migrate frontend
+docker compose stop api worker-interactive worker-ingestion worker-evaluation
+docker compose build api worker-interactive worker-ingestion worker-evaluation migrate frontend
 docker compose run --rm migrate
 docker compose up -d
 ```
 
 For a host development database, `uv run alembic upgrade head` applies the same
-upgrade. The current head is `0004`. A downgrade from `0004` removes conversation
+upgrade. The current head is `0006`. A downgrade from `0004` removes conversation
 tables/data and associations; it is not a preservation mechanism for chat history.
 Previously selected legacy last-Run browser state is not converted into a made-up
 multi-turn conversation. Legacy Runs remain accessible through their existing API.
@@ -255,9 +259,11 @@ Start local infrastructure and the desktop development window:
 
 ```bash
 cp .env.example .env  # only for a new checkout; preserve existing runtime settings
-docker compose up -d --build
 npm --prefix frontend ci
 npm --prefix frontend run desktop:dev
+# Copy Desktop connection hash to LOCAL_AUTH_TOKEN_HASH in .env first.
+# In another terminal, start backend:
+docker compose up -d --build
 ```
 
 `desktop:dev` runs Vite on `127.0.0.1:1420` and opens Tauri; it does not manually
@@ -305,7 +311,11 @@ database is introduced.
 | Runtime setting | Default | Scope |
 |---|---|---|
 | `CONVERSATION_RECENT_MESSAGE_LIMIT` | 8 | 2–64 eligible recent messages, not rounds. |
-| `CONVERSATION_CONTEXT_TOKEN_BUDGET` | 8192 | 4096–65536 conservative input units; one UTF-8 byte per estimated token, including rewrite instruction/schema and a wrapper reserve. |
+| `CONVERSATION_CONTEXT_TOKEN_BUDGET` | 8192 | 4096–65536 approximate input tokens, including rewrite instruction/schema and a 512-token wrapper reserve; Latin/alphanumeric runs use roughly one token per 3 characters, CJK two per character. |
+| `CONVERSATION_RECENT_TOKENS` | 2048 | Recent-message payload subbudget. |
+| `CONVERSATION_SUMMARY_TOKENS` | 1024 | Summary payload subbudget. |
+| `CONVERSATION_MEMORY_TOKENS` | 1024 | Selected-memory payload subbudget. |
+| `CONVERSATION_MEMORY_TOP_K` | 8 | 1–100 selected memory texts; all hard filters apply regardless. |
 | `CONVERSATION_SUMMARY_MAX_BYTES` | 2048 | 256–16384 UTF-8 bytes for the rolling extractive summary. |
 | `CONVERSATION_MESSAGE_MAX_BYTES` | 2048 | 256–16384 bytes per recent-message/memory excerpt sent to contextualization; stored messages stay intact. |
 
@@ -386,3 +396,167 @@ The optional overlay is not required for ordinary local Docker deployment.
 This release is a trusted local single-user application. Public/multi-tenant
 hosting, authorization, encrypted backups and automatic graph checkpoint resumption
 are outside v1; do not expose loopback ports publicly without implementing them.
+
+## Dedicated workload queues
+
+Compose starts `worker-interactive`, `worker-ingestion` and `worker-evaluation`.
+Each worker subscribes to exactly one queue, so a long evaluation cannot occupy
+an interactive worker. This does not reserve CPU/RAM/network on a shared host;
+provision those resources for model loading and the chosen concurrency.
+
+`INTERACTIVE_QUEUE`, `INGESTION_QUEUE` and `EVALUATION_QUEUE` optionally change
+queue names. Names must be distinct, valid lowercase identifiers and not the
+reserved legacy `research` name. A Run freezes its queue at durable dispatch,
+including retries of that dispatch; changing configuration cannot move accepted
+jobs silently. Drain old names before removing their workers.
+
+```bash
+# One foreground development worker per terminal.
+uv run python -m ragagent.worker --queue interactive
+uv run python -m ragagent.worker --queue ingestion
+uv run python -m ragagent.worker --queue evaluation
+# Scale only the required workload; each replica handles one job at a time.
+docker compose up -d --scale worker-interactive=2
+```
+
+`/api/ready` checks DB/Redis and a registered interactive worker. Read
+`/api/queues` to check ingestion/evaluation independently; a missing dedicated
+worker leaves its jobs queued until durable reconciliation's bound, then fails
+with a safe code rather than switching to another workload.
+
+For upgrades with pending jobs in the old `research` queue, stop new writes,
+keep the new workers and temporarily run `python -m ragagent.worker --queue legacy`
+with the same DB/Redis/settings. It consumes only already queued legacy jobs.
+Remove it after the legacy queue drains. Do not purge Redis or recreate the DB.
+
+
+## Local owner authentication
+
+Desktop generates a random local credential on first launch and stores it in
+Windows Credential Manager, macOS Keychain or Linux Secret Service (keyring
+3.6.3, MIT OR Apache-2.0; native platform features explicitly enabled). Linux
+requires an unlocked Secret Service and a session DBus. Storage failure shows
+an error and fails closed; there is no plaintext fallback. Restart Desktop after
+restoring the system credential store.
+
+1. Open Desktop **连接授权 / Connection authorization** before starting Compose.
+2. Copy the displayed **hash**, not a bearer, into `.env` as `LOCAL_AUTH_TOKEN_HASH`.
+3. Start/recreate API and workers, then click **连接并检查授权**. Use
+   `docker compose up -d --build` for a new install; environment changes require
+   recreating API/workers (`docker compose up -d --force-recreate api worker-interactive worker-ingestion worker-evaluation`).
+
+Only `/api/health`, `/api/ready`, `/api/auth/status` are public. All other `/api/`
+requests, including SSE and PDF/artifacts, require a bearer or Web session.
+Missing verifier keeps readiness at 503; missing/invalid auth returns 401.
+Health is process liveness and does not imply auth or model readiness. Desktop
+Rust owns bearer headers; IPC/JS never receives the bearer. The verifier hash is
+not usable as a bearer. Keep original Host/Origin and loopback protections.
+
+For **Web development only**, inject an additional randomly generated
+`LOCAL_AUTH_TOKEN` into the API process environment. Never put it in `.env`,
+config, a URL, localStorage, image, log or command-line arguments. For Compose,
+use a temporary untracked overlay containing only `environment: [LOCAL_AUTH_TOKEN]`
+for the `api` service and supply its value through the parent process environment.
+Enter that credential once in Web **连接授权**. The browser receives an HttpOnly,
+SameSite=Strict, 8-hour session cookie scoped to `/api`; the input clears after
+submission. Backend retains only hashed sessions, at most 128. Restart invalidates
+sessions; removing/rotating a credential invalidates its sessions. This additional
+Web credential does not remove the Desktop verifier. Log out with authenticated
+`DELETE /api/auth/session`; protect the operating-system account and its clipboard.
+
+Privacy: histories, memory, summaries, source PDF, Run traces and evaluation
+artifacts are local persisted data. Selected context is sent to configured remote
+providers. Credential pattern rejection is a defense at persisted user-input
+boundaries, not a universal secret detector or a PDF content sanitizer. Back up
+and restrict access to the database, config and local cache directories.
+
+## Windows installers and build provenance
+
+The Desktop workflow has a `windows-latest` job that runs locked Rust checks,
+actual Windows Credential Manager round-trip tests, and Tauri MSI + NSIS builds.
+It uploads the actual `.msi`, NSIS `.exe`, `installer-manifest.json` (SHA-256,
+size/version/source/date), and `build-metadata.json`. Download artifacts from
+a successful **Desktop / windows-desktop** run matching the desired source.
+These are **unsigned Windows builds**: SmartScreen warnings may appear. Verify
+manifest hashes and provenance. No release signing/auto-update is configured.
+MSI is not a substitute for a human Windows 11 installation test.
+
+Prerequisites: Windows 10/11 x64, WebView2 Runtime, and the independent local
+backend (Docker Desktop/Compose or the documented Python/PostgreSQL/Redis setup).
+Install one package (MSI or NSIS), launch Desktop, pair its hash, then start backend.
+The installer installs the client only; it does not provision backend/model weights.
+Configure models server-side and perform a real citation-grounded chat, restart
+Desktop and confirm persistence. Uninstall via Windows Apps; local backend data
+and the OS credential are intentionally retained. To remove them, separately back
+up/delete the owned DB volumes/data and the Scientific RAGAgent Credential Manager
+entry; never use volume deletion as an ordinary upgrade command. Windows 11
+launch/connect/chat/restart/uninstall remains a manual acceptance requirement.
+
+Build locally with Node 22, Rust 1.90.0, MSVC C++ Build Tools + Windows SDK,
+WebView2 and the Tauri bundler prerequisites:
+
+```powershell
+npm --prefix frontend ci
+cd frontend
+npx tauri build --bundles msi,nsis -- --locked
+```
+
+Backend images package immutable source/date metadata and run as UID/GID 10001;
+Compose no longer mounts `.git`. Source checkout evaluation can use Git, but an
+installed artifact without Git records `unknown` instead of crashing. Runtime
+code/content fingerprints still identify actual sources/models/indexes separately.
+Set nonsecret `RAGAGENT_SOURCE_COMMIT` (40 hex) and `RAGAGENT_BUILD_TIME` (UTC ISO)
+as **build arguments** before image build; CI derives them from actual checkout.
+Desktop provenance is compiled into Rust; neither runtime needs a Git directory.
+Versions across Python/Web/Desktop are 0.2.0.
+
+### Upgrading existing local volumes
+
+Back up PostgreSQL/PDF/config first and preserve all existing volumes. Fresh
+named `papers`, `models`, `config` volumes inherit image ownership (10001).
+Old root-owned volumes require a one-time owner migration while API/workers are
+stopped; do not delete or replace the volumes. With your existing project/volumes,
+run `docker compose run --rm --no-deps --user 0 migrate chown -R 10001:10001 /data /models /app/config`.
+This explicit maintenance command changes only those application mounts.
+
+Default config now uses a persistent named `config` volume so nonroot API can
+save mappings. For an old bind-mounted `./config` customization, import it into
+the named volume before new tasks: `docker compose run --rm --no-deps -v "${PWD}/config:/import:ro" migrate python -c "import shutil; shutil.copyfile('/import/agents.yaml','/app/config/agents.yaml')"`.
+PowerShell uses `$PWD.Path` for the host path. Alternatively retain a custom bind
+mount through an overlay and grant UID 10001 write access explicitly. Indexes,
+conversations, messages, summaries, Memory and Run history are retained; Alembic
+upgrades in place. Do not run `down -v`. A missing verifier intentionally leaves
+readiness unready until pairing is complete.
+
+
+## Evidence display and diagnostics
+
+Completed answers show **已通过自动证据校验 / Passed automated evidence validation**.
+This checks citations and model-based support; it does not guarantee scientific
+truth. Optional claim supporting spans are original chunk Unicode code-point
+ranges, checked against the released quote. The UI slices the original content,
+never displays a generated replacement quote; invalid/unavailable offsets fall
+back to the complete original quote. Full source, section, pages, version/status
+and independent table/header context remain inspectable. Narrow spans use the
+existing reviewer call, without another retrieval or paid verification call.
+
+Web PDF links use `#page=N`; viewer support varies. Desktop downloads a scoped
+original PDF and opens the OS viewer, which may ignore pages. The citation panel
+shows the target page and asks for manual navigation. No claim of automatic
+Windows page navigation is made.
+
+In Settings, expand **本机诊断与版本** and click **读取诊断**. Protected
+`GET /api/diagnostics` separates auth, DB, Redis, all workload queues and build
+identity. It reports credential configuration separately from provider connectivity,
+and labels model loading/inference/index compatibility **not_tested**. It never
+loads model weights or issues a paid request. Use connectivity tests/actual jobs
+for those checks. Database connect timeout is 5 seconds; Redis socket timeout
+is 3 seconds. Infrastructure readiness alone never means model readiness.
+
+API errors provide safe `error_code`, `message`, `retryable`, `details` (null) and
+request ID; HTTPException retains safe `detail` compatibility. Frontend adds
+recovery guidance for auth/network/provider/retrieval/worker errors and retains
+safe codes. Retryable is manual guidance, not automatic UI retries or a guarantee
+of no duplicate provider charge. Invalid responses/raw exceptions/secret-bearing
+text are not echoed. OpenAPI's Bearer authorization supports protected CLI/Web
+requests; native Desktop authorization remains confined to Rust/system storage.

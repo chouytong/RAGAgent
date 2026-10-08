@@ -4,6 +4,9 @@ x-backend: &backend
   build:
     context: .
     dockerfile: docker/backend.Dockerfile
+    args:
+      RAGAGENT_SOURCE_COMMIT: ${RAGAGENT_SOURCE_COMMIT:-unknown}
+      RAGAGENT_BUILD_TIME: ${RAGAGENT_BUILD_TIME:-unknown}
   env_file: .env
   environment:
     DATA_DIR: /data
@@ -11,8 +14,7 @@ x-backend: &backend
   volumes:
     - papers:/data
     - models:/models
-    - ./config:/app/config
-    - ./.git:/app/.git:ro
+    - config:/app/config
 services:
   db:
     image: pgvector/pgvector:0.8.2-pg17
@@ -54,9 +56,23 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
-  worker:
+  worker-interactive:
     <<: *backend
-    command: ["python", "-m", "ragagent.worker"]
+    command: ["python", "-m", "ragagent.worker", "--queue", "interactive"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  worker-ingestion:
+    <<: *backend
+    command: ["python", "-m", "ragagent.worker", "--queue", "ingestion"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  worker-evaluation:
+    <<: *backend
+    command: ["python", "-m", "ragagent.worker", "--queue", "evaluation"]
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
@@ -74,3 +90,4 @@ volumes:
   redis:
   papers:
   models:
+  config:

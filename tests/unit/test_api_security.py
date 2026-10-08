@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Headers
 
 from ragagent.api.app import app
 from ragagent.settings import Settings
@@ -19,7 +19,7 @@ def mapping() -> dict[str, Any]:
 
 @pytest.fixture
 async def provider_client(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, auth_headers: Headers
 ) -> AsyncIterator[tuple[AsyncClient, Path]]:
     path = tmp_path / "agents.yaml"
     path.write_text(json.dumps(mapping()))
@@ -33,7 +33,9 @@ async def provider_client(
         return func(*args, **kwargs)
 
     monkeypatch.setattr("fastapi.routing.run_in_threadpool", inline_sync_endpoint)
-    async with AsyncClient(transport=ASGITransport(app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app), base_url="http://testserver", headers=auth_headers
+    ) as client:
         yield client, path
 
 

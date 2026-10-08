@@ -61,9 +61,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
+      - name: Configure ephemeral local authentication
+        run: python scripts/ci_auth.py --compose-env .env
+      - name: Record actual checkout identity for images
+        run: |
+          echo "RAGAGENT_SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "RAGAGENT_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - run: docker compose config --quiet
       - run: docker compose up -d --build --wait --wait-timeout 300
       - run: curl --fail http://127.0.0.1:8000/api/health && curl --fail http://127.0.0.1:8080/ >/dev/null
       - run: python scripts/smoke.py
+      - name: Verify lossless ownership migration of existing application volumes
+        run: |
+          docker compose stop api worker-interactive worker-ingestion worker-evaluation
+          docker compose run --rm --no-deps --user 0 migrate python -c "import os; from pathlib import Path; paths=[Path('/data'),Path('/models'),Path('/app/config')]; [(p/'ownership-upgrade-test.txt').write_text('SYNTHETIC OWNERSHIP FIXTURE') for p in paths]; os.chown('/app/config/agents.yaml',0,0); os.chmod('/app/config/agents.yaml',0o600)"
+          docker compose run --rm --no-deps --user 0 migrate chown -R 10001:10001 /data /models /app/config
+          docker compose run --rm --no-deps migrate python -c "import os; from pathlib import Path; assert os.geteuid()==10001; assert all((p/'ownership-upgrade-test.txt').read_text()=='SYNTHETIC OWNERSHIP FIXTURE' for p in [Path('/data'),Path('/models'),Path('/app/config')]); Path('/app/config/agents.yaml').read_text()"
+          docker compose up -d --wait --wait-timeout 120
+          python scripts/smoke.py
       - if: always()
         run: docker compose logs --tail=100 && docker compose down

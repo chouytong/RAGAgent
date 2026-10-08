@@ -30,6 +30,7 @@ from ragagent.db.models import (
     Run,
     new_id,
 )
+from ragagent.domain.privacy import reject_credentials
 from ragagent.jobs import dispatch_run
 from ragagent.settings import get_settings
 
@@ -117,6 +118,10 @@ async def upload(
     year: Annotated[int | None, Form(ge=1000, le=2100)] = None,
     venue: Annotated[str | None, Form(max_length=256)] = None,
 ) -> RunResponse:
+    try:
+        reject_credentials([title, authors, venue])
+    except ValueError:
+        raise HTTPException(422, "credential_content_not_allowed") from None
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     path = settings.data_dir / f"{new_id()}.pdf"

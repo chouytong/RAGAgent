@@ -53,6 +53,8 @@ def build_research(
         result = await supervisor.complete(
             "Create a scientific ResearchPlan with distinct required aspects and bounded "
             "retrieval subtasks. Cover methods, datasets and metrics when requested. "
+            "Identify question_type and requested named comparison_entities; comparisons "
+            "may involve several entities in one paper. "
             "Each task must map to an aspect. Do not produce conclusions.",
             {"research_question": state.research_question, "filters": state.filters.model_dump()},
             ResearchPlan,
@@ -87,7 +89,14 @@ def build_research(
                 dict.fromkeys(state.research_plan.required_aspects + revised.required_aspects)
             )
             revised = ResearchPlan(
-                objective=revised.objective, required_aspects=aspects, subtasks=revised.subtasks
+                objective=revised.objective,
+                required_aspects=aspects,
+                subtasks=revised.subtasks,
+                question_type="comparison"
+                if state.research_plan.question_type == "comparison"
+                else revised.question_type,
+                comparison_entities=state.research_plan.comparison_entities
+                or revised.comparison_entities,
             )
             for task in revised.subtasks:
                 task.filters = constrain_filters(task.filters, state.filters)
@@ -205,6 +214,8 @@ def build_research(
             state.research_plan.required_aspects,
             reviewer,
             state.research_question,
+            comparison=state.research_plan.question_type == "comparison",
+            comparison_entities=state.research_plan.comparison_entities,
         )
         contradictions = [x.text for a in state.analysis_results for x in a.contradictions]
         invalid = [v.claim_id for v in validation.verdicts if not v.supported or v.contradiction]

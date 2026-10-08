@@ -8,29 +8,38 @@ Tauri 桌面入口。它保留了现有的基于证据的知识库和 Supervisor
 不依赖 langgraph-supervisor，不声称未经验证的基准测试成绩。
 
 会话与桌面升级已发布到
-[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations)，
+[`fix/engineering-hardening`](https://github.com/chouytong/RAGAgent/tree/fix/engineering-hardening)，
 建立在现有 `phase-6-evaluation-deployment` RAG/Research 基线上。
 在 PR 完成审查和合并之前，请使用这个审查分支。
 
 ```bash
-git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
+git clone --branch fix/engineering-hardening https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
 # First checkout only; preserve an existing runtime .env.
 cp .env.example .env
+# 先安装并启动 Desktop，打开“连接授权”。
+npm --prefix frontend ci
+npm --prefix frontend run desktop:dev
+# 将非秘密配对哈希填入 .env 的 LOCAL_AUTH_TOKEN_HASH。
+# 在另一个终端启动 Compose，再回到 Desktop 检查授权。
 docker compose up --build
 ```
 
 打开 [Web 备用入口](http://localhost:8080) 和 [API 文档](http://localhost:8000/docs)。
-如需独立应用窗口，先用 Compose 启动本地后端，再执行
-`npm --prefix frontend ci` 和 `npm --prefix frontend run desktop:dev`。
+首次使用先在 Desktop 完成本机配对，再启动 Compose；Web 开发授权见部署文档。
 桌面壳只连接 `http://127.0.0.1:8000`，不会打包或启动 Python、PostgreSQL、Redis。
 Rust 和各平台的 WebView 前置依赖列在
 [部署文档](docs/deployment.md#desktop-ui-with-local-backend) 中。
 需要 Docker Compose v2 和 Git；建议至少 8 GB 内存、20 GB 可用磁盘空间。
-系统可以在未配置 API key 时启动；推理需要配置聊天服务商或本地模型。
+后端需要先配置本机授权；模型 API key 可为空启动；推理需要配置聊天服务商或本地模型。
 本地解析、嵌入和重排模型的权重会在首次使用时下载。
 `/api/health` 报告进程是否存活；`/api/ready` 检查数据库、Redis 和队列 worker，
 不代表模型或服务商已经具备推理条件。
+
+RAG/Research 会话使用 `interactive` 队列，PDF/arXiv 使用 `ingestion`，评测使用
+`evaluation`。Compose 分别启动三个独立 worker；`/api/ready` 检查交互服务所需
+数据库、Redis 和交互 worker，`/api/queues` 分别报告三个队列的可用性与待处理数。
+扩容及已有作业迁移见[部署文档](docs/deployment.md#dedicated-workload-queues)。
 
 ## 架构
 
@@ -74,6 +83,10 @@ Research 保留 Supervisor Plan、Agent 执行轨迹、Reviewer Result 和局限
 重新加载 Web UI 或重启桌面应用后，会从 PostgreSQL 读取会话与消息；
 浏览器 `localStorage` 不是会话存储。URL 片段用于标识当前选中的会话。
 
+界面先读取最近 50 条轻量消息，需要时再加载更早历史。SSE 驱动实时进度，
+重连或恢复时增量读取新消息并核对执行中的占位消息。Run、执行轨迹和证据详情
+在打开时读取。被重试替代的旧回答保留为审计记录，并退出后续问题的上下文。
+
 每一轮会同时创建消息、现有 Run 和持久化调度意图。
 worker 将可发布的助手回答与终态 Run/事件一起保存；SSE 重连会重放已保存的执行事件。
 重复提交通过客户端 UUID 识别；重试会创建新的 Run，并保留前一次失败供查看。
@@ -84,8 +97,11 @@ worker 将可发布的助手回答与终态 Run/事件一起保存；SSE 重连�
 以及用户明确添加的记忆，共同将代词或已命名的候选对象解析成独立问题。
 原始问题和上下文化后的问题可在执行详情中查看。
 旧内容的摘录可能丢失信息；指代不明确时会明确失败，而不是猜测。
-`CONVERSATION_CONTEXT_TOKEN_BUDGET=8192` 使用保守的 UTF-8 字节估算来约束
+`CONVERSATION_CONTEXT_TOKEN_BUDGET=8192` 使用多语言近似 token 估算及 UTF-8 摘录字节上限来约束
 上下文化输入，并非服务商 tokenizer 的计数，也不是整个工作流的预算。
+独立问题跳过改写模型；追问只选择相关 Top-K 记忆文本，全部硬过滤条件仍然生效。
+带来源的结构化会话意图/实体状态与抽取式摘要一同持久化，重启后可恢复；
+Memory 面板可查看，修改记忆后状态失效并重新构建。
 
 **记忆 ≠ 证据。** 消息、摘要和记忆只用于理解意图与指导检索。
 两个独立的 Graph 都会重新检索本轮的原文证据，并保留现有的证据准入、
@@ -316,3 +332,17 @@ Graph 检查点自动续跑、公共/多租户安全与 ANN 调优仍需要进�
 不是恢复的历史规格或此前的验收证据。
 阶段日志区分了实际完成的检查，
 与仍未验证的真实 PDF、模型、服务商和基准测试验证。
+
+多语言模型采用仍未验证：[真实模型矩阵](docs/benchmarks/multilingual.md) 将现有模型、候选模型与翻译变体的指标标为 **Not measured**，需提供经审查的人工金标与已核验许可/版本的权重才能实测。CI 的脚本化 provider 不证明检索质量，默认配置保持不变。
+
+本机授权与 Web 开发临时凭据见 [部署说明](docs/deployment.md#local-owner-authentication)。原生凭据保存在系统凭据库，JS 只读取配对哈希；受保护的 API、SSE 与文献读取均需授权。
+
+Windows MSI/NSIS 制品由 [Desktop 工作流](.github/workflows/desktop.yml) 构建；仅使用成功运行的制品并核对哈希。见 [Windows 安装与限制](docs/deployment.md#windows-installers-and-build-provenance)。构建未签名，Windows 11 人工验收需单独完成。
+
+回答完成状态为 **已通过自动证据校验**：引用与模型支持检查不保证科学事实正确。
+逐结论支持片段使用经过范围检查的原文字符位置；无法验证时保留完整原文。
+PDF 面板明确目标页，系统查看器可能需要手动跳页。Settings 的“本机诊断与版本”
+分别显示授权、数据库、Redis、各任务队列与构建来源；模型加载和推理需真实任务验证。
+实际测试证据与尚未验证的验收项见 [工程整改报告](ENGINEERING_REVIEW.md)。
+
+实现提交 `f803d824` 的 backend/frontend/Compose 与 Linux/Windows Desktop CI 均已通过。真实未签名 MSI/NSIS 制品及下载后独立核对的 SHA-256 见[工程报告](ENGINEERING_REVIEW.md#final-implementation-ci-and-inspected-windows-artifacts)。多语言真实质量与 Windows 11 人工验收仍未验证。

@@ -244,6 +244,7 @@ class Message(Base):
     __table_args__ = (
         UniqueConstraint("conversation_id", "ordinal", name="uq_messages_conversation_ordinal"),
         CheckConstraint("ordinal >= 0", name="ck_messages_ordinal"),
+        CheckConstraint("attempt_number >= 1", name="ck_messages_attempt_number"),
         CheckConstraint("role IN ('user', 'assistant', 'system')", name="ck_messages_role"),
         CheckConstraint(
             "status IN ('queued', 'running', 'completed', "
@@ -257,6 +258,11 @@ class Message(Base):
     role: Mapped[Literal["user", "assistant", "system"]] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text, default="")
     ordinal: Mapped[int] = mapped_column(Integer)
+    retry_of_message_id: Mapped[str | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
+    is_effective: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     run_id: Mapped[str | None] = mapped_column(
         ForeignKey("runs.id", ondelete="SET NULL"), index=True
     )
@@ -288,6 +294,23 @@ class ConversationSummary(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class ConversationStateRecord(Base):
+    __tablename__ = "conversation_states"
+    __table_args__ = (
+        CheckConstraint("through_ordinal >= 0", name="ck_conversation_states_ordinal"),
+        CheckConstraint("version >= 1", name="ck_conversation_states_version"),
+    )
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    through_ordinal: Mapped[int] = mapped_column(Integer)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    content: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

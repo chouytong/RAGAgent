@@ -55,6 +55,9 @@ type MockMessage = {
   content: string;
   ordinal: number;
   run_id: string | null;
+  retry_of_message_id: string | null;
+  attempt_number: number;
+  is_effective: boolean;
   status: string;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -86,6 +89,8 @@ export async function setupChat(
     }
   >();
   const messageOffsets: number[] = [];
+  const messageQueries: string[] = [];
+  const fullRunRequests: string[] = [];
   const sentBodies: Record<string, unknown>[] = [];
   let sends = 0;
   let retries = 0;
@@ -115,6 +120,7 @@ export async function setupChat(
     currentRun: MockRun | null,
   ) {
     const history = messages.get(conversation.id)!;
+    if (currentRun) runs.set(currentRun.id, currentRun);
     const message = {
       id: randomUUID(),
       conversation_id: conversation.id,
@@ -122,15 +128,56 @@ export async function setupChat(
       content,
       ordinal: history.length,
       run_id: currentRun?.id ?? null,
+      retry_of_message_id: null as string | null,
+      attempt_number: 1,
+      is_effective: true,
       status:
         role === "user" ? "completed" : (currentRun?.status ?? "completed"),
-      metadata: {},
+      metadata:
+        currentRun?.status === "completed"
+          ? { presentation: presentation(currentRun) }
+          : {},
       created_at: time,
       updated_at: time,
       run: currentRun,
     };
     history.push(message);
     return message;
+  }
+  // MOCK projection represents the bounded wire schema, not evidence verification.
+  function presentation(item: MockRun) {
+    const pool = (item.result?.reranked_evidence ??
+      item.result?.evidence_pool ??
+      []) as (typeof evidence)[];
+    return {
+      limitations: item.result?.limitations ?? [],
+      citation_refs: pool.map((source) => ({
+        evidence_id: source.evidence_id,
+        page_start: source.page_start,
+        page_end: source.page_end,
+      })),
+    };
+  }
+  function lightRun(item: MockRun | null) {
+    if (!item) return null;
+    const { result: _detail, ...summary } = item;
+    return summary;
+  }
+  function lightMessage(item: MockMessage) {
+    return { ...item, run: lightRun(item.run) };
+  }
+  function lightTurn(item: {
+    conversation: MockConversation;
+    user_message: MockMessage;
+    assistant_message: MockMessage;
+    run: MockRun;
+  }) {
+    return {
+      ...item,
+      user_message: lightMessage(item.user_message),
+      assistant_message: lightMessage(item.assistant_message),
+      run: lightRun(item.run),
+    };
   }
   function completeRun(id: string, custom?: MockRun) {
     const current = runs.get(id)!;
@@ -146,6 +193,11 @@ export async function setupChat(
           message.run = next;
           if (message.role === "assistant") {
             message.status = next.status;
+            if (next.status === "completed")
+              message.metadata = {
+                ...message.metadata,
+                presentation: presentation(next),
+              };
             message.content = ["completed", "insufficient_evidence"].includes(
               next.status,
             )
@@ -209,6 +261,7 @@ export async function setupChat(
       conversation.title = "New chat";
       return reply(conversation);
     }
+    if (path[1] === "state") return reply(null);
     if (path[1] === "summary") {
       if (method === "DELETE") summaries.set(conversation.id, null);
       return reply(
@@ -248,13 +301,39 @@ export async function setupChat(
     if (path[1] === "messages") {
       const history = messages.get(conversation.id)!;
       if (method === "GET") {
-        const offset = Number(url.searchParams.get("offset") ?? 0),
-          limit = Number(url.searchParams.get("limit") ?? 100);
-        messageOffsets.push(offset);
-        return reply(history.slice(offset, offset + limit));
+        messageQueries.push(url.search);
+        if (path.length === 3) {
+          const item = history.find((message) => message.id === path[2]);
+          return item
+            ? reply(lightMessage(item))
+            : reply({ detail: "message_not_found" }, 404);
+        }
+        const limit = Number(url.searchParams.get("limit") ?? 50);
+        if (url.searchParams.has("offset")) {
+          const offset = Number(url.searchParams.get("offset"));
+          messageOffsets.push(offset);
+          return reply(history.slice(offset, offset + limit).map(lightMessage));
+        }
+        if (url.searchParams.has("after_ordinal"))
+          return reply(
+            history
+              .filter(
+                (item) =>
+                  item.ordinal > Number(url.searchParams.get("after_ordinal")),
+              )
+              .slice(0, limit)
+              .map(lightMessage),
+          );
+        const candidates = url.searchParams.has("before_ordinal")
+          ? history.filter(
+              (item) =>
+                item.ordinal < Number(url.searchParams.get("before_ordinal")),
+            )
+          : history;
+        return reply(candidates.slice(-limit).map(lightMessage));
       }
       const key = String(body.client_request_id);
-      if (requests.has(key)) return reply(requests.get(key), 202);
+      if (requests.has(key)) return reply(lightTurn(requests.get(key)!), 202);
       if (options.sendError && path.length === 2)
         return reply({ detail: options.sendError }, 503);
       if (path[3] === "retry") retries += 1;
@@ -277,6 +356,12 @@ export async function setupChat(
           ? history.find((item) => item.role === "user")!
           : makeMessage(conversation, "user", String(body.content), currentRun);
       const assistant = makeMessage(conversation, "assistant", "", currentRun);
+      if (path[3] === "retry") {
+        const old = history.find((item) => item.id === path[2])!;
+        old.is_effective = false;
+        assistant.retry_of_message_id = old.id;
+        assistant.attempt_number = old.attempt_number + 1;
+      }
       const turn = {
         conversation,
         user_message: user,
@@ -284,9 +369,18 @@ export async function setupChat(
         run: currentRun,
       };
       requests.set(key, turn);
-      return reply(turn, 202);
+      return reply(lightTurn(turn), 202);
     }
     return reply({ detail: "mock_route_not_found" }, 404);
+  });
+  await page.route("**/api/runs/*", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/")[3];
+    fullRunRequests.push(id);
+    const item = runs.get(id);
+    return route.fulfill({
+      json: item ?? { detail: "run_not_found" },
+      status: item ? 200 : 404,
+    });
   });
   await page.route("**/api/runs/*/cancel", (route) => {
     cancels += 1;
@@ -316,6 +410,8 @@ export async function setupChat(
     summaries,
     requests,
     messageOffsets,
+    messageQueries,
+    fullRunRequests,
     sentBodies,
     create,
     makeMessage,

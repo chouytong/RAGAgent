@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -60,6 +60,8 @@ class ResearchPlan(BaseModel):
     objective: str
     required_aspects: list[str] = Field(min_length=1, max_length=12)
     subtasks: list[SubTask] = Field(min_length=1, max_length=12)
+    question_type: Literal["fact", "comparison", "synthesis", "filter"] = "synthesis"
+    comparison_entities: list[str] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode="after")
     def unique_tasks(self) -> "ResearchPlan":

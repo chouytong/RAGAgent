@@ -2,6 +2,18 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 
 export const isDesktop = (): boolean => isTauri();
+export const AUTH_REQUIRED = "ragagent-auth-required";
+function checked(response: Response): Response {
+  if (response.status === 401) window.dispatchEvent(new Event(AUTH_REQUIRED));
+  return response;
+}
+export type LocalCredentialStatus = {
+  available: boolean;
+  tokenHash: string | null;
+  errorCode: string | null;
+};
+export const localCredentialStatus = (): Promise<LocalCredentialStatus> =>
+  invoke("local_auth_status");
 const decode = (data: string): Uint8Array =>
   Uint8Array.from(atob(data), (character) => character.charCodeAt(0));
 function encode(data: Uint8Array): string {
@@ -18,7 +30,7 @@ export async function request(
   path: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  if (!isDesktop()) return fetch(path, options);
+  if (!isDesktop()) return checked(await fetch(path, options));
   localPath(path);
   if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
   const method = (options.method ?? "GET").toUpperCase();
@@ -48,16 +60,18 @@ export async function request(
     });
     if (options.signal?.aborted)
       throw new DOMException("Aborted", "AbortError");
-    return new Response(
-      [204, 205, 304].includes(result.status)
-        ? null
-        : new Uint8Array(decode(result.body)),
-      {
-        status: result.status,
-        headers: result.contentType
-          ? { "Content-Type": result.contentType }
-          : {},
-      },
+    return checked(
+      new Response(
+        [204, 205, 304].includes(result.status)
+          ? null
+          : new Uint8Array(decode(result.body)),
+        {
+          status: result.status,
+          headers: result.contentType
+            ? { "Content-Type": result.contentType }
+            : {},
+        },
+      ),
     );
   } catch (error) {
     if (options.signal?.aborted)
@@ -76,6 +90,7 @@ export type StreamCallbacks = {
   onExecution: (data: string, lastEventId: string) => void;
   onDone: (data: string) => void;
   onError: (error: string) => void;
+  onOpen?: () => void;
 };
 type NativeEvent =
   | { event: "execution"; data: string; id: string }
@@ -87,6 +102,7 @@ export function stream(path: string, callbacks: StreamCallbacks): () => void {
     throw new Error("invalid_event_cursor");
   if (!isDesktop()) {
     const source = new EventSource(`${path}?after=${after}`);
+    source.onopen = () => callbacks.onOpen?.();
     source.addEventListener("execution", (event) => {
       const message = event as MessageEvent<string>;
       callbacks.onExecution(message.data, message.lastEventId);
@@ -113,7 +129,11 @@ export function stream(path: string, callbacks: StreamCallbacks): () => void {
     else if (event.event === "done") {
       callbacks.onDone(event.data);
       closed = true;
-    } else callbacks.onError(event.data);
+    } else {
+      if (event.data === "local_auth_required")
+        window.dispatchEvent(new Event(AUTH_REQUIRED));
+      callbacks.onError(event.data);
+    }
   };
   void invoke("run_events", { id, path, after, onEvent }).catch(
     (error: unknown) => {
@@ -139,7 +159,17 @@ export async function openLocalResource(path: string): Promise<void> {
     ).test(path)
   )
     throw new Error("local_resource_not_allowed");
-  await invoke("open_resource", { path });
+  try {
+    await invoke("open_resource", { path });
+  } catch (error) {
+    if (error === "local_auth_required")
+      window.dispatchEvent(new Event(AUTH_REQUIRED));
+    throw new Error(
+      typeof error === "string" && /^[a-z][a-z0-9_]{0,100}$/.test(error)
+        ? error
+        : "local_document_unavailable",
+    );
+  }
 }
 export async function openPaperPdf(paperId: string, page = 1): Promise<void> {
   await openLocalResource(`/api/papers/${paperId}/pdf#page=${page}`);

@@ -715,3 +715,233 @@ The preceding implementation head `670cc5f0ffdc873b1cfc2e91828e15f7d0a5896d`
 also completed GitHub's PR-triggered CI and Desktop workflows successfully
 (runs `37417995238` and `37417995251`). This does not change the recorded gaps in
 real-paper/actual-model scientific acceptance or platform packaging validation.
+
+
+## Engineering hardening — Phase 1 (2026-10-07 UTC)
+
+Comparison support now checks distinct source-grounded entities and explicit
+semantic claim/citation support, including comparisons within one paper. Retry
+attempts keep their audit rows while superseded attempts leave subsequent context
+and persisted summaries; migration 0005 preserves legacy data. Conversation
+deletion commits revocation/deletion before best-effort RQ cancellation. Existing
+transactional Run/Message/outbox and late-worker ownership guards remain in use.
+
+Changed files: domain research/conversation/context contracts; database Message
+model and migration 0005; conversation API/context/service; independent RAG and
+Research graph/state; evidence validation; comparison, retry-context, concurrency,
+delete and migration regressions; ENGINEERING_REVIEW.md and this stage log.
+
+Actual checks: Ruff format --check (151 files), Ruff lint, mypy (64 files), full
+Python tests on PostgreSQL 17.10/pgvector 0.8.2 and Redis (504 passed, 3 upstream
+warnings); npm ci/lint/check/build, 8 transport tests, 26 Playwright tests; Rust
+fmt/locked check/clippy -D warnings, 7 Rust tests, Linux Tauri native release build.
+Canonical Compose config and frozen-dependency image build passed. Full Compose
+startup failed with the managed environment's 32 GB VFS disk quota; DB/Redis health
+passed, API health/ready NOT EXECUTED. Cleanup retained database volumes. Windows,
+actual product GUI and actual-model scientific acceptance NOT EXECUTED. Commands,
+initial evidence and remaining Phase 2–8 scope are in ENGINEERING_REVIEW.md.
+
+The concurrent retry regression drains the real durable reconciliation path before
+asserting exactly one queue submission, and repeats reconciliation to verify
+idempotency. This retains the strict enqueue-count assertion when immediate
+skip_locked dispatch legitimately waits for another transaction. Migration tests
+resolve Alembic's current head and preserve legacy schema/data assertions.
+
+
+## Engineering hardening — Phase 2 (2026-10-08 Asia/Shanghai)
+
+Lightweight MessageSummary/RunSummary projections and the latest-50/before/after
+ordinal API replace embedded full results. Single-message reconciliation handles
+status updates at an unchanged ordinal; explicit legacy offset remains supported.
+Conversation active IDs use one batch query. Bounded display metadata keeps only
+final supported citation references, never quote/trace/draft text. Run details stay
+available through GET /api/runs/{id} and are loaded on demand.
+
+Tasks now uses history/message/composer/result components and separate message/SSE
+hooks. Healthy SSE has no periodic message-history poll; reconnection/resume and
+lost-final-event recovery read only new messages and active placeholders. Retry
+audit attempts remain collapsible. Both English and Chinese README editions were
+updated with identical behavior, along with API/data-model documentation.
+
+Actual checks: Ruff format/lint, mypy (65 source files), 522 Python tests with real
+PostgreSQL/pgvector and Redis; npm ci/lint/check/build, 8 transport tests and 28
+Playwright tests (all original 26 retained); Rust fmt/check/test/clippy with locks
+(8 tests), and Linux Tauri release build passed. Compose config and frontend image
+build passed. Backend image rebuild/full Compose health/ready NOT EXECUTED because
+the environment's proven 32 GB VFS quota left insufficient space for its 2 GB
+backend image/containers. Windows and real-model scientific acceptance NOT
+EXECUTED. Raw before benchmarks and the repeatable measurement script are kept
+in docs/benchmarks and scripts; after measurements will follow this implementation
+commit so the manifest identifies the code actually tested.
+
+Phase 2 measurement follow-up: actual before/after fixture hashes matched for all
+18 original shapes. RAG full 100 rows: 5,108,941 → 93,241 bytes; SELECT 102 → 2;
+heavy Run-result SELECT 100 → 0; median 93.346 → 7.449 ms. The new latest-50,
+older-page, one-row/empty incremental shapes are separately labeled. Before 270
+and after 630 raw samples are committed; these measure PG/ASGI API performance
+on explicit synthetic fixtures, not browser rendering or model retrieval quality.
+
+## Engineering hardening — Phase 3 (2026-10-08 Asia/Shanghai)
+
+Added shared durable queue routing, immutable per-Run queue names, validated
+queue settings and one-workload worker CLI. Compose/cloud CA overlay now runs
+independent interactive, ingestion and evaluation workers; scaling/legacy drain
+instructions and both READMEs updated. `/api/queues` reports each workload;
+`/api/ready` requires DB/Redis and interactive worker registration.
+
+Changed settings/queues/jobs, RQ transport, worker, API readiness/diagnostics,
+Compose/env/docs and real integration/unit tests. Real RQ/PG occupancy probe
+completed interactive scripted RAG while evaluation remained running, then
+released evaluation; single-trial raw result is explicitly synthetic, not a
+model quality or capacity benchmark.
+
+Ruff format/lint PASS, mypy 66 sources PASS, full Python real PG/Redis **534 passed**;
+frontend npm ci/lint/check/build, **8 transport / 28 Playwright** PASS;
+Rust fmt/locked check/test/clippy, **8 passed / 0 ignored**. Compose config PASS.
+Backend image build/full Compose health/ready NOT EXECUTED: VFS/32 GB quota,
+less than 1 GB available. Windows and real-model manual acceptance NOT EXECUTED.
+
+Phase 3 Linux Tauri `npm run desktop:build`：PASS，实际 release 编译 1m21s；未测 Windows 或产品窗口。
+
+## Engineering hardening — Phase 4 (2026-10-08 Asia/Shanghai)
+
+Added deterministic bilingual standalone gate, stable relevance Top-K Selected
+Memory separate from Stored Memory, all-hard-filter merging, multilingual
+approximate input estimation and independent recent/summary/memory subbudgets.
+A new typed `conversation_states` table (migration 0006) persists source-linked
+intent/entities alongside the extractive summary. Original eligible entity
+sources survive restart even after summary clipping; superseded/deleted sources
+cannot be restored. Mutation/clear lifecycle invalidates derived state; Memory
+panel/API expose it. Both README editions, memory/deployment/architecture/API
+contracts and `.env.example` match the new behavior.
+
+Preserved all false-history/false-memory scientific evidence assertions; made
+those questions explicit pronoun follow-ups to keep testing the rewritten path
+now that independent questions skip it. Source-linked state never enters
+analyst/reviewer Evidence. All migrations remain incremental.
+
+Actual 50/100 messages x English/Chinese x 100 memories probes ran both frozen
+baseline and working implementation, 15 samples per case, matched shared-field
+fixture hashes, source SHA-256 and raw timing/input records in docs/benchmarks.
+Baseline returns explicit budget exceeded; selected/bounded current requests
+construct successfully. No LLM/scientific quality measurement is inferred.
+
+Ruff format/lint/mypy PASS; real PG/Redis Python **558 passed**, 3 upstream warnings;
+npm ci/lint/check/build PASS; **8 transport / 28 Playwright** PASS;
+Rust fmt/locked check/test/clippy **8 passed / 0 ignored**;
+Linux Tauri release build PASS (1m23s); Compose config PASS. Local image build and
+full health/ready NOT EXECUTED due VFS/32 GB quota. Phase 2 GitHub Compose checks
+succeeded separately; this does not establish Phase 4 runtime success. Windows
+and actual multilingual models/manual science acceptance NOT EXECUTED.
+
+## Engineering hardening — Phase 5 (2026-10-08 Asia/Shanghai)
+
+Added an offline licensed real-model matrix and JSON manifest schema requiring
+three language directions, operator-supplied human gold/translation provenance,
+consistent paper metadata and local immutable/license identities. It reuses the
+existing retrieval evaluator in a unique scratch schema and cleans it afterward;
+no production indexes/models are rewritten. Missing weights return Not measured
+and null metrics before DB/model access. Direction metrics disclose failed counts.
+
+Actual real-model measurement blocked: proxy CONNECT Hugging Face 403, optional
+torch/sentence_transformers absent, approved human gold and weight directories
+not supplied. Current/candidate/both/pretranslation 5x3 status artifact retains
+null metrics and unverified candidate licenses/revisions. Defaults unchanged.
+This does not complete real multilingual quality acceptance.
+
+Ruff format/lint/mypy 68 sources PASS; real PG/Redis **566 passed**, 3 warnings;
+frontend npm ci/lint/check/build, **8 transport / 28 Playwright** PASS;
+Rust fmt/locked check/test/clippy **8 passed / 0 ignored**; Linux native Tauri build
+PASS (1m29s); Compose config PASS. Local image build/full health/ready NOT EXECUTED
+(VFS quota); Windows/real-model acceptance NOT EXECUTED for this version.
+
+One original comparison test failed because a random UUID contained the string
+500. Fixed only fixture paper/section/chunk identities, retaining every assertion;
+full rerun passed. Scripted benchmark-contract tests are explicitly not real model
+metrics. Changed evaluation/provider benchmark helpers, CLI, fixture/probe tests,
+README editions, schema/status/usage docs and this report/log.
+
+
+## Engineering Phase 6 — Local authentication and privacy (2026-10-08 Asia/Shanghai)
+
+Changed: api/auth/app/schemas/papers, centralized privacy guards, provider config,
+evaluation contracts/CLIs, native keyring/bridge, AuthPanel/transport, bilingual
+README/deployment/env/CI, explicit authorized test clients and new regressions.
+OS-native credentials; nonsecret verifier pairing; fail closed; all private API,
+SSE/download routes authenticated; ephemeral Web HttpOnly sessions; no raw bearer
+in frontend persistent storage/config. Four actual LiteLLM adapters with scripted
+failure checked through real PG Run, terminal SSE and logs. Existing assertions
+retained when test clients gained headers.
+
+Actual checks: Ruff format/lint, mypy 70 sources; real PG/Redis **591 passed**
+(3 upstream warnings); npm ci/lint/type/build, **8 transport + 29 Playwright**;
+Rust fmt/check/test/clippy locked, **9 passed, 0 ignored**; Linux native release
+build PASS (1m48s); Compose config PASS. Local Docker build/full health/ready
+NOT EXECUTED (VFS/32 GB quota); remote phase-specific CI pending. Windows system
+credential test is Windows-only and NOT EXECUTED locally; no actual model inference.
+
+
+## Engineering Phase 7 — Windows and artifact provenance (2026-10-08 Asia/Shanghai)
+
+Changed Windows CI/installer manifest, native build metadata/IPC, packaged backend
+identity and safe no-Git fallback, aligned Python/Web/Desktop version 0.2.0,
+nonroot backend and persistent writable config mount, bilingual docs and explicit
+upgrade ownership/import instructions. No DB/model/config volume deletion.
+
+Actual: Ruff format/lint/mypy 71 sources; uv lock + sync --locked; real PG/Redis
+**593 passed** (3 upstream warnings); npm ci/lint/type/build, **8 transport +
+29 Playwright**; Rust fmt/check/test/clippy locked **9 passed, 0 ignored**;
+Compose config PASS. Local full Docker image/health/ready NOT EXECUTED (VFS quota).
+Windows build is launched by publishing this phase; result/installer artifacts
+need separate actual evidence. Windows 11 human installation NOT EXECUTED;
+unsigned installers, no signing claim. Linux native release build PASS (1m33s).
+
+### Phase 7 Windows CI correction (2026-10-08 Asia/Shanghai)
+
+Actual first Windows run 37745437701 / job 113205680558 failed at Prettier:
+30 tracked text files acquired CRLF on Windows checkout; all later build/test
+steps were skipped, not passed. Add .gitattributes enforcing LF for auto-detected
+text without weakening/ignoring formatter checks. Linux Desktop and CI/Compose
+run 37745437745 on source 1f4f0a6bc0ba22f1f3880a9661ab4758e614e261 succeeded.
+Installer success remains unverified until the corrected Windows job runs.
+
+## Engineering Phase 8 — Evidence UX, diagnostics and final review (2026-10-08 Asia/Shanghai)
+
+Changed claim/evidence optional original code-point ranges and verified fallback;
+frontend Unicode-safe original slicing, automatic-evidence terminology and PDF
+manual target-page guidance; protected diagnostics/build metadata; safe error
+payloads/Swagger Bearer and recovery messages; native SSE 401 stops reconnecting
+and prompts pairing. Fixed confirmed New Chat race by clearing old draft before
+asynchronous creation, preserving newly typed input with delayed-response test.
+Bilingual README maintained; final ENGINEERING_REVIEW A–L/A–K evidence recorded.
+CI extends config PUT smoke and lossless old root-owned volume owner migration.
+
+Actual: Ruff format/lint/mypy 72 sources; real PG/Redis **604 passed** (3 upstream
+warnings); npm ci/lint/type/build, **10 transport + 32 Playwright**; Rust fmt/locked
+check/test/clippy **9 passed, 0 ignored**; Linux Tauri release build **PASS (1m48s)**;
+Compose config PASS. Local Docker image/full health/ready NOT EXECUTED (VFS quota);
+phase-specific remote results are separate. No real-model quality/gold made up.
+Windows 11 human installation/chat/restart/uninstall NOT EXECUTED, signing absent.
+Windows CI OS Credential Manager test passed; installer build pending at this record.
+
+Remote af1d2cad CI backend/Compose passed; one frontend test failed in async New Chat
+because new draft could be cleared. This phase fixes production behavior and adds
+deterministic slow-response regression; original assertions/timeouts retained.
+
+
+### Final remote implementation evidence (2026-10-08 Asia/Shanghai)
+
+Head f803d824432108cfd4bc4c4771b6764b96010cda / tree
+8246aad106e5d648b258f81a78c378935a829e5b: CI 37747840466 backend/frontend/Compose
+all success, including nonroot config writes and lossless application volume
+owner migration followed by real ready/smoke. Desktop 37747840471 Linux window/
+loopback smoke and Windows MSI/NSIS build/upload all success. Windows 10 Rust tests
+passed (0 ignored), including real OS Credential Manager round trip.
+
+Downloaded artifact 11536936513 and independently recalculated ZIP and both
+MSI/NSIS file sizes/SHA-256; all match generated manifest/GitHub digest. Raw evidence
+in docs/validation/windows-artifacts-f803d824.json. Actual PR checkout merge commit
+a1737fcfeeb05a2b81c80c7d6f3ed91403cbb5bf has identical source tree to head, verified
+using Git; provenance records actual checkout. This is CI build evidence only;
+Windows 11 human install/chat/restart/uninstall and real-model quality remain
+NOT EXECUTED/Not measured. Evidence-only documentation follow-up changes no code.

@@ -33,16 +33,31 @@ class Settings(BaseSettings):
     research_evidence_budget: int = Field(default=96, ge=1, le=512)
     provider_timeout: float = Field(default=60, gt=0, le=300)
     evaluation_timeout_seconds: int = Field(default=7200, ge=1800, le=86400)
+    interactive_queue: str = Field(default="interactive", pattern=r"^[a-z][a-z0-9_-]{0,63}$")
+    ingestion_queue: str = Field(default="ingestion", pattern=r"^[a-z][a-z0-9_-]{0,63}$")
+    evaluation_queue: str = Field(default="evaluation", pattern=r"^[a-z][a-z0-9_-]{0,63}$")
     conversation_recent_message_limit: int = Field(default=8, ge=2, le=64)
     conversation_context_token_budget: int = Field(default=8192, ge=4096, le=65536)
     conversation_summary_max_bytes: int = Field(default=2048, ge=256, le=16384)
     conversation_message_max_bytes: int = Field(default=2048, ge=256, le=16384)
+    conversation_recent_tokens: int = Field(default=2048, ge=128, le=32768)
+    conversation_summary_tokens: int = Field(default=1024, ge=128, le=16384)
+    conversation_memory_tokens: int = Field(default=1024, ge=128, le=16384)
+    conversation_memory_top_k: int = Field(default=8, ge=1, le=100)
+    local_auth_token_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     max_upload_bytes: int = Field(default=30 * 1024 * 1024, ge=1)
 
     @model_validator(mode="after")
     def valid_chunk_overlap(self) -> "Settings":
         if self.chunk_overlap_tokens >= self.chunk_target_tokens:
             raise ValueError("chunk_overlap_tokens must be less than chunk_target_tokens")
+        return self
+
+    @model_validator(mode="after")
+    def distinct_queues(self) -> "Settings":
+        names = {self.interactive_queue, self.ingestion_queue, self.evaluation_queue}
+        if len(names) != 3 or "research" in names:
+            raise ValueError("queue_names_must_be_distinct_and_not_legacy_research")
         return self
 
 

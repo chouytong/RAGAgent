@@ -68,8 +68,8 @@ assistant answers and multi-agent drafts are not evidence for another turn.
 
 Older messages become a deterministic, lossy rolling extractive summary with
 message-source IDs. This avoids another summarization LLM charge and does not
-invent semantic facts. The input budget counts UTF-8 bytes conservatively as token
-units, including contextualizer instruction/schema and a wrapper reserve; it is
+invent semantic facts. The input budget uses a multilingual approximate token estimate with UTF-8
+excerpt caps, including contextualizer instruction/schema and a wrapper reserve; it is
 not an actual provider tokenizer, total graph prompt budget or completion budget.
 The original history remains stored until deletion. See
 [conversation-memory.md](conversation-memory.md) for configuration and limitations.
@@ -144,7 +144,7 @@ cost totals are absent when any attempted call's charge is unknown.
 An allowlisted source hash distinguishes uncommitted implementation changes
 from the recorded Git commit without including dotenv secrets or corpus files.
 
-Infrastructure readiness checks PostgreSQL, Redis and the research queue's
+Infrastructure readiness checks PostgreSQL, Redis and the interactive queue's
 registered worker; process liveness remains separate. The empty-corpus Compose
 smoke exercises real RQ failure and proxied SSE with an unconfigured hosted
 provider. Neither readiness nor that failure smoke proves successful inference.
@@ -170,3 +170,10 @@ requirements, [repair ADRs](adr/README.md) document current decisions, and
 7. Conversation product upgrade: existing-database migration, idempotent turns,
    bounded follow-up context, memory isolation/deletion, chat UI persistence,
    conversational evaluation and separate desktop/Web transport verification.
+
+Dedicated workload routing freezes `_queue_name` in the Run request beside the
+existing durable dispatch. RAG/Research use interactive; ingestion/arXiv use
+ingestion; eval jobs use evaluation. One worker process listens to one workload,
+with independently scalable Compose services. This removes queue occupancy
+coupling, while shared-host CPU/RAM contention remains possible. `/api/queues`
+reports each queue independently; `/api/ready` requires an interactive worker.

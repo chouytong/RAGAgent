@@ -1,12 +1,12 @@
 """Conversation lifecycle contracts. Conversation context never defines Evidence."""
 
-import re
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ragagent.domain.privacy import safe_text
 from ragagent.domain.research import MetadataFilter
 
 ConversationMode = Literal["rag", "research"]
@@ -16,24 +16,9 @@ MessageStatus = Literal[
 ]
 MemoryKind = Literal["goal", "constraint", "term", "preference", "task"]
 
-# Reject recognizable credentials at persistence boundaries without consulting
-# runtime secrets. Ordinary scientific words such as "token" are not rejected.
-_CREDENTIAL = re.compile(
-    r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----"
-    r"|\bsk-[A-Za-z0-9_-]{20,}"
-    r"|\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"
-    r"|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"
-    r"|\beyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}"
-    r"|\b(?:[A-Z][A-Z0-9_]*_(?:API_KEY|SECRET|TOKEN|PASSWORD)|api_key|access_token|secret_key)"
-    r"\s*[:=]\s*[\"']?[A-Za-z0-9_./+-]{12,}"
-    r"|https?://[^\s/:@]+:[^\s/@]+@"
-)
-
 
 def safe_context_text(value: str) -> str:
-    if _CREDENTIAL.search(value):
-        raise ValueError("credential_content_not_allowed")
-    return value.strip()
+    return safe_text(value)
 
 
 class ConversationFilters(MetadataFilter):
@@ -114,15 +99,22 @@ class MemoryCreate(BaseModel):
         return self
 
 
-class RunSnapshot(BaseModel):
+class RunSummary(BaseModel):
+    """Small execution identity/status; full results are fetched from the Run API."""
+
     model_config = ConfigDict(from_attributes=True)
     id: str
     kind: str
     status: str
     trace_id: str
     error_code: str | None = None
-    result: dict[str, Any] | None = None
     created_at: datetime
+
+
+class RunSnapshot(RunSummary):
+    """Compatibility detail contract; conversation endpoints use RunSummary."""
+
+    result: dict[str, Any] | None = None
 
 
 class ConversationResponse(BaseModel):
@@ -136,25 +128,32 @@ class ConversationResponse(BaseModel):
     active_run_id: str | None = None
 
 
-class MessageResponse(BaseModel):
+class MessageSummary(BaseModel):
     id: str
     conversation_id: str
     role: MessageRole
     content: str
     ordinal: int
+    retry_of_message_id: str | None = None
+    attempt_number: int = Field(default=1, ge=1)
+    is_effective: bool = True
     run_id: str | None
     status: MessageStatus
     metadata: dict[str, Any]
     created_at: datetime
     updated_at: datetime
-    run: RunSnapshot | None = None
+    run: RunSummary | None = None
+
+
+class MessageResponse(MessageSummary):
+    """Compatibility import for callers migrating to MessageSummary."""
 
 
 class TurnResponse(BaseModel):
     conversation: ConversationResponse
-    user_message: MessageResponse
-    assistant_message: MessageResponse
-    run: RunSnapshot
+    user_message: MessageSummary
+    assistant_message: MessageSummary
+    run: RunSummary
 
 
 class SummaryResponse(BaseModel):

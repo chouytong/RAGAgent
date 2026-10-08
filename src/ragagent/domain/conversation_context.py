@@ -12,6 +12,10 @@ class ContextConfig(BaseModel):
     max_context_tokens: int = Field(default=8192, ge=4096, le=65536)
     summary_max_bytes: int = Field(default=2048, ge=256, le=16384)
     per_message_max_bytes: int = Field(default=2048, ge=256, le=16384)
+    recent_tokens: int = Field(default=2048, ge=128, le=32768)
+    summary_tokens: int = Field(default=1024, ge=128, le=16384)
+    memory_tokens: int = Field(default=1024, ge=128, le=16384)
+    memory_top_k: int = Field(default=8, ge=1, le=100)
 
 
 class ContextMessage(BaseModel):
@@ -20,6 +24,11 @@ class ContextMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
     status: str = "completed"
+    retry_of_message_id: str | None = Field(
+        default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    attempt_number: int = Field(default=1, ge=1)
+    is_effective: bool = True
 
 
 class StructuredMemory(BaseModel):
@@ -43,6 +52,26 @@ class ResolvedReferent(BaseModel):
     resolved_text: str = Field(min_length=1, max_length=256)
     source_kind: Literal["message", "memory"]
     source_id: str = Field(min_length=1, max_length=64)
+
+
+class StateText(BaseModel):
+    source_kind: Literal["message", "memory"]
+    source_id: str = Field(min_length=1, max_length=64)
+    content: str = Field(min_length=1, max_length=256)
+
+
+class ConversationState(BaseModel):
+    """Intent/entity state, never a store of scientific findings or evidence."""
+
+    version: int = Field(default=1, ge=1)
+    through_ordinal: int = Field(default=-1, ge=-1)
+    goals: list[StateText] = Field(default_factory=list, max_length=8)
+    constraints: MetadataFilter = Field(default_factory=MetadataFilter)
+    constraint_memory_ids: list[str] = Field(default_factory=list, max_length=100)
+    resolved_entities: list[ResolvedReferent] = Field(default_factory=list, max_length=20)
+    important_terms: list[StateText] = Field(default_factory=list, max_length=12)
+    open_questions: list[StateText] = Field(default_factory=list, max_length=8)
+    scientific_evidence: Literal[False] = False
 
 
 class QueryContextualization(BaseModel):

@@ -3,11 +3,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from ragagent.domain.privacy import SensitiveInput
 from ragagent.domain.research import MetadataFilter, SearchResult
 from ragagent.ingestion.arxiv import ARXIV_ID
 
 
-class QueryRequest(BaseModel):
+class QueryRequest(SensitiveInput):
     query: str = Field(min_length=1, max_length=10000)
     filters: MetadataFilter = Field(default_factory=MetadataFilter)
 
@@ -17,7 +18,7 @@ class SearchResponse(SearchResult):
     usage_scope: Literal["current_request"] = "current_request"
 
 
-class ResearchRequest(BaseModel):
+class ResearchRequest(SensitiveInput):
     research_question: str = Field(min_length=1, max_length=10000)
     filters: MetadataFilter = Field(default_factory=MetadataFilter)
 
@@ -52,7 +53,7 @@ class PaperResponse(BaseModel):
     chunk_count: int
 
 
-class EntityAnnotation(BaseModel):
+class EntityAnnotation(SensitiveInput):
     name: str = Field(min_length=1, max_length=256)
     entity_type: str = Field(pattern="^(dataset|method|metric|other)$")
 
@@ -65,7 +66,7 @@ class ProviderTest(BaseModel):
     agent: str = Field(pattern="^(supervisor|retriever|analyst|reviewer)$")
 
 
-class PaperPatch(BaseModel):
+class PaperPatch(SensitiveInput):
     title: str | None = Field(default=None, min_length=1, max_length=1000)
     authors: list[str] | None = Field(default=None, max_length=100)
     year: int | None = Field(default=None, ge=1000, le=2100)

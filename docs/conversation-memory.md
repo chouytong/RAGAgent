@@ -69,16 +69,40 @@ excerpts and enforced filters; it never creates EvidenceRecords. Defaults are:
 | Setting | Default |
 |---|---|
 | `CONVERSATION_RECENT_MESSAGE_LIMIT` | 8 messages, not 8 turns |
-| `CONVERSATION_CONTEXT_TOKEN_BUDGET` | 8192 conservative contextualization input units; valid range 4096–65536 |
+| `CONVERSATION_CONTEXT_TOKEN_BUDGET` | 8192 approximate multilingual contextualization input tokens; valid range 4096–65536 |
 | `CONVERSATION_SUMMARY_MAX_BYTES` | 2048 UTF-8 bytes |
 | `CONVERSATION_MESSAGE_MAX_BYTES` | 2048 UTF-8 bytes per message/memory excerpt |
 
-The estimate allocates one UTF-8 byte as one token unit and counts the serialized
-payload, contextualizer instruction, response schema and a 512-byte wrapper
-reserve. It is a conservative engineering estimate, not an actual provider
-tokenizer measurement. The provider adapter records actual returned token usage
-and cost separately. This budget bounds rewrite input; it does not replace the
-graphs' evidence/retry budgets or bound completion tokens/currency.
+The estimate uses two tokens per CJK character, roughly one per three Latin/
+alphanumeric characters and one per punctuation character. It counts serialized
+payload, instruction, response schema and a 512-token wrapper reserve. This is
+approximate, not a tokenizer upper bound. Existing UTF-8 byte caps still prevent
+oversized excerpts. The provider adapter records actual returned usage/cost.
+The current question and enforced filters are never silently clipped.
+
+Subbudgets default to `CONVERSATION_RECENT_TOKENS=2048`,
+`CONVERSATION_SUMMARY_TOKENS=1024`, `CONVERSATION_MEMORY_TOKENS=1024`;
+`CONVERSATION_MEMORY_TOP_K=8`. Stored Memory contains up to 100 explicit records;
+Selected Memory is a stable relevance/kind/ID-ranked text subset. English terms
+and Chinese character bigrams supply deterministic relevance. Dependent questions
+can retain term memories for pronoun resolution. **All structured hard filters
+merge before text selection**, including constraints whose text is not selected.
+This selector is bounded engineering behavior, not learned retrieval quality.
+
+A deterministic bilingual gate skips contextualization for independent questions
+(e.g. “DANN 是什么？”); pronoun, ordinal and prior-turn cues require resolution.
+Ambiguity still fails closed. Heuristics cannot guarantee every natural-language
+question is classified correctly; ambiguous questions should name their target.
+
+`conversation_states` (migration `0006`) stores typed goals, constraints,
+validated entities, explicit terms and the latest open question, each with source
+IDs. It has no scientific-findings field and is marked `scientific_evidence=false`.
+Validated old entity names can survive summary clipping only while their original
+same-conversation Message/Memory exists and remains eligible. Superseded attempts
+cannot anchor them. Memory mutation, summary deletion, memory clear and conversation
+clear invalidate state; conversation deletion cascades it. The Memory panel and
+`GET /api/conversations/{id}/state` expose it. This supplements the extractive
+summary and does not turn either record into citation evidence.
 
 Older messages are compacted into a deterministic, lossy extractive summary.
 It keeps source message IDs, the initial question/answer anchors and recent

@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { request, stream, openLocalResource } from "../../src/transport.ts";
+import { errorMessage } from "../../src/errors.ts";
 
 let commands: { command: string; args: Record<string, unknown> }[];
 let native: (
@@ -56,6 +57,31 @@ test("web fetch remains same-origin and forwards abort signal", async () => {
   );
   assert.equal(fetchMock.mock.callCount(), 1);
   assert.equal(commands.length, 0);
+});
+
+test("native unauthorized responses prompt pairing and never pass authorization through IPC", async () => {
+  const dispatched: string[] = [];
+  Object.assign(window, {
+    dispatchEvent: (event: Event) => {
+      dispatched.push(event.type);
+      return true;
+    },
+  });
+  native = async () => ({
+    status: 401,
+    contentType: "application/json",
+    body: btoa('{"error_code":"local_auth_required"}'),
+  });
+  assert.equal((await request("/api/conversations")).status, 401);
+  assert.deepEqual(dispatched, ["ragagent-auth-required"]);
+  assert.ok(!JSON.stringify(commands).includes("Authorization"));
+});
+
+test("private raw error text is excluded from user-facing recovery messages", () => {
+  const secret = "Bearer " + "SYNTHETIC".repeat(8);
+  assert.ok(!errorMessage(secret).includes(secret));
+  assert.match(errorMessage("provider_key_missing"), /聊天模型尚未配置/);
+  assert.match(errorMessage("local_auth_required"), /本机授权/);
 });
 test("desktop request only passes allowed payload fields and decodes response", async () => {
   const response = await request("/api/conversations", {

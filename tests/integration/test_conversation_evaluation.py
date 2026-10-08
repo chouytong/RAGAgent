@@ -5,7 +5,7 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, TypeVar
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -174,6 +174,7 @@ async def test_credentials_are_rejected_before_evaluation_run_or_artifact_creati
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     path: tuple[str | int, ...],
+    auth_headers: httpx.Headers,
 ) -> None:
     credential = "sk-" + "syntheticfixture" * 2
     submitted: list[str] = []
@@ -195,7 +196,9 @@ async def test_credentials_are_rejected_before_evaluation_run_or_artifact_creati
     ]
     try:
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+            headers=auth_headers,
         ) as client:
             response = await client.post(
                 "/api/evaluations/conversation",
@@ -220,8 +223,10 @@ async def test_comparison_followup_uses_two_real_papers_instead_of_historical_wi
     empty_db: Session, tmp_path: Path, mode: str
 ) -> None:
     paper_ids, chunk_ids = [], []
-    for name, size in (("Alpha", 20), ("Beta", 80)):
+    # Stable IDs keep the numeric-memory oracle from matching random UUID digits.
+    for index, (name, size) in enumerate((("Alpha", 20), ("Beta", 80))):
         paper = Paper(
+            id=str(UUID(int=index + 1)),
             title=f"Paper {name}",
             sha256=uuid4().hex * 2,
             original_path="synthetic-comparison-fixture",
@@ -230,10 +235,17 @@ async def test_comparison_followup_uses_two_real_papers_instead_of_historical_wi
         )
         empty_db.add(paper)
         empty_db.flush()
-        section = Section(paper_id=paper.id, title="Methods", path="Methods", ordinal=0)
+        section = Section(
+            id=str(UUID(int=index + 11)),
+            paper_id=paper.id,
+            title="Methods",
+            path="Methods",
+            ordinal=0,
+        )
         empty_db.add(section)
         empty_db.flush()
         chunk = Chunk(
+            id=str(UUID(int=index + 21)),
             paper_id=paper.id,
             section_id=section.id,
             section_path="Methods",
@@ -404,7 +416,10 @@ async def test_conversation_evaluation_real_retrieval_and_local_context_isolatio
 
 @pytest.mark.integration
 async def test_conversation_evaluation_api_worker_and_artifact_use_existing_run_lifecycle(
-    job_sessions: sessionmaker[Session], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    job_sessions: sessionmaker[Session],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    auth_headers: httpx.Headers,
 ) -> None:
     with job_sessions() as db:
         paper = Paper(
@@ -481,7 +496,9 @@ async def test_conversation_evaluation_api_worker_and_artifact_use_existing_run_
             )
         )
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+            headers=auth_headers,
         ) as client:
             response = await client.post(
                 "/api/evaluations/conversation", json={"dataset": value.model_dump(mode="json")}

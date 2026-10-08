@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { isDesktop, openPaperPdf } from "./transport";
-import type { Evidence, SourceStatus } from "./api";
+import type { Evidence, SourceStatus, SupportingPair } from "./api";
 export const sourceStatusLabels: Record<SourceStatus, string> = {
   unknown: "来源状态未核验",
   active: "来源状态：已标记有效",
@@ -145,15 +145,43 @@ type MarkdownNode = {
   url?: string;
   children?: MarkdownNode[];
 };
+export type CitationReference = {
+  evidence_id: string;
+  page_start: number;
+  page_end?: number;
+};
 export function Citations({
   text,
   evidence,
+  references = [],
+  loadEvidence,
+  supportingPairs = [],
 }: {
   text: string;
   evidence: Evidence[];
+  references?: CitationReference[];
+  loadEvidence?: () => Promise<Evidence[]>;
+  supportingPairs?: SupportingPair[];
 }) {
   const [selected, setSelected] = useState<Evidence | null>(null);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState<Evidence[]>([]);
+  const sources = evidence.length ? evidence : loaded;
+  async function openEvidence(id: string) {
+    setError("");
+    try {
+      let next = sources;
+      if (!next.some((item) => item.evidence_id === id) && loadEvidence) {
+        next = await loadEvidence();
+        setLoaded(next);
+      }
+      const source = next.find((item) => item.evidence_id === id);
+      if (!source) throw new Error("evidence_not_found");
+      setSelected(source);
+    } catch (error) {
+      setError(String(error));
+    }
+  }
   function remarkEvidence() {
     return (tree: unknown) => {
       function walk(node: MarkdownNode) {
@@ -169,13 +197,20 @@ export function Citations({
           }
           return child.value.split(/(\[E:[0-9a-f-]{36}\])/g).map((part) => {
             const id = part.match(/^\[E:([0-9a-f-]{36})\]$/)?.[1];
-            const source = evidence.find((item) => item.evidence_id === id);
-            return source
+            const source =
+              sources.find((item) => item.evidence_id === id) ??
+              references.find((item) => item.evidence_id === id);
+            return source || (id && loadEvidence)
               ? {
                   type: "link",
                   url: `#evidence-${id}`,
                   children: [
-                    { type: "text", value: `文献 · p.${source.page_start}` },
+                    {
+                      type: "text",
+                      value: source
+                        ? `文献 · p.${source.page_start}`
+                        : "文献引用",
+                    },
                   ],
                 }
               : { type: "text", value: part };
@@ -208,13 +243,13 @@ export function Citations({
           remarkPlugins={[remarkGfm, remarkEvidence]}
           components={{
             a: ({ href, children }) => {
-              const source = href?.startsWith("#evidence-")
-                ? evidence.find((item) => item.evidence_id === href.slice(10))
+              const id = href?.startsWith("#evidence-")
+                ? href.slice(10)
                 : undefined;
-              return source ? (
+              return id ? (
                 <button
                   className="citation"
-                  onClick={() => setSelected(source)}
+                  onClick={() => void openEvidence(id)}
                 >
                   {children}
                 </button>
@@ -230,9 +265,16 @@ export function Citations({
           {text}
         </Markdown>
       </div>
-      <details>
-        <summary>证据 ({evidence.length})</summary>
-        {evidence.map((item) => (
+      <details
+        onToggle={(event) => {
+          if (event.currentTarget.open && !sources.length && loadEvidence)
+            void loadEvidence()
+              .then(setLoaded)
+              .catch((error) => setError(String(error)));
+        }}
+      >
+        <summary>证据 ({sources.length || references.length})</summary>
+        {sources.map((item) => (
           <button
             className="evidence"
             key={item.evidence_id}
@@ -254,7 +296,42 @@ export function Citations({
             {selected.page_end}
           </p>
           <small>Chunk: {selected.chunk_id}</small>
+          {supportingPairs
+            .filter((pair) => pair.evidence_id === selected.evidence_id)
+            .map((pair) => {
+              const { supporting_span_start: start, supporting_span_end: end } =
+                pair;
+              // Python offsets count Unicode code points, including non-BMP symbols.
+              const characters = Array.from(selected.content ?? "");
+              const originalStart = selected.span_start,
+                originalEnd = selected.span_end;
+              if (
+                start == null ||
+                end == null ||
+                originalStart == null ||
+                originalEnd == null ||
+                start < originalStart ||
+                end <= start ||
+                end > originalEnd ||
+                end > characters.length ||
+                characters.slice(originalStart, originalEnd).join("") !==
+                  selected.quote
+              )
+                return null;
+              return (
+                <div key={pair.claim_id} aria-label="逐结论支持片段">
+                  <p>
+                    结论 {pair.claim_id} · 原文字符 {start}–{end}
+                    （自动检查，仍需人工判断）
+                  </p>
+                  <blockquote>
+                    {characters.slice(start, end).join("")}
+                  </blockquote>
+                </div>
+              );
+            })}
           <blockquote aria-label="主引用原文">{selected.quote}</blockquote>
+          <small>完整检索原文保留；没有可验证的窄片段时以此原文为准。</small>
           {selected.source_spans.length > 0 && (
             <details>
               <summary>主引用来源定位</summary>
@@ -296,6 +373,10 @@ export function Citations({
             </div>
           )}
           {pdf(selected.paper.paper_id, selected.page_start, "打开原始 PDF")}
+          <p role="note">
+            目标页：{selected.page_start}。Web 使用 PDF
+            页码片段；桌面系统查看器可能忽略页码，请手动跳转到此页。
+          </p>
         </dialog>
       )}
     </>

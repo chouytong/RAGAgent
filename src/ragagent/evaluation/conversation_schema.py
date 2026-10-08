@@ -5,8 +5,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
-from ragagent.domain.conversation import safe_context_text
 from ragagent.domain.conversation_context import ContextMessage, StructuredMemory
+from ragagent.domain.privacy import reject_credentials as _safe_dataset_strings
 from ragagent.evaluation.schema import EvaluationCase, EvaluationDataset
 from ragagent.evaluation.validation import validate_references
 
@@ -14,19 +14,6 @@ ConversationDimension = Literal[
     "context_resolution", "evidence_grounding", "memory_isolation", "long_summary"
 ]
 DIMENSIONS = ("context_resolution", "evidence_grounding", "memory_isolation", "long_summary")
-
-
-def _safe_dataset_strings(value: object) -> None:
-    """Reject recognizable credentials before a conversation dataset is persisted."""
-    if isinstance(value, str):
-        safe_context_text(value)
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            _safe_dataset_strings(key)
-            _safe_dataset_strings(item)
-    elif isinstance(value, list):
-        for item in value:
-            _safe_dataset_strings(item)
 
 
 class ConversationEvaluationTurn(EvaluationCase):

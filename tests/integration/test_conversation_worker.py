@@ -17,6 +17,7 @@ from ragagent.conversations.service import prepare_context
 from ragagent.db.models import (
     Chunk,
     Conversation,
+    ConversationStateRecord,
     ConversationSummary,
     ExecutionEvent,
     Memory,
@@ -68,6 +69,11 @@ class ScientificScript:
                     r"\[message:([\w-]+)\] (?:user|assistant): ([^\n]+)",
                     payload["conversation_summary"]["content"],
                 )
+                sources += [
+                    (item["source_id"], item["resolved_text"])
+                    for item in payload.get("resolved_intent_entities_not_evidence", [])
+                    if item["source_kind"] == "message"
+                ]
                 identity = next(
                     identity for identity, content in reversed(sources) if name in content
                 )
@@ -296,9 +302,18 @@ async def test_persisted_followup_and_restart_keep_fresh_cited_evidence(
                 assert "[E:" in message.content
                 context = run.result["conversation_context"]
                 assert context["original_query"] == query
+                state = session.get(ConversationStateRecord, cid)
+                assert state is not None and state.version == queries.index(query) + 1
+                assert state.content["scientific_evidence"] is False
+                assert state.content["through_ordinal"] < message.ordinal
                 if query != queries[0]:
                     assert "Dataset A" in context["contextualized_query"]
                     assert context["used_message_ids"]
+                    assert state.content["resolved_entities"]
+                    assert all(
+                        "participants" not in entity["resolved_text"]
+                        for entity in state.content["resolved_entities"]
+                    )
                 if query == queries[1]:
                     assert "Dataset B" in context["contextualized_query"]
                     assert "largest" in context["contextualized_query"]
@@ -342,7 +357,8 @@ async def test_false_local_history_and_memory_cannot_supply_scientific_answer(
                 Memory(conversation_id=cid, kind="term", content="Dataset A has 500 participants.")
             )
             session.commit()
-        rid = queued_turn(job_sessions, cid, pid, "How many participants does Dataset A contain?")
+        # Keep exercising false context at the contextualizer after the standalone gate.
+        rid = queued_turn(job_sessions, cid, pid, "How many participants does it contain?")
         await worker.execute_async(rid)
         with job_sessions() as session:
             run = session.get(Run, rid)
@@ -396,3 +412,63 @@ async def test_context_checkpoint_retains_rewrite_charge_before_graph_dispatch(
                     assert saved.result["conversation_context"]["rewrite_status"] == "resolved"
             finally:
                 provider.usage.on_update = None
+
+
+@pytest.mark.integration
+async def test_restart_recovers_old_entity_after_summary_has_lost_its_text(
+    job_sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ragagent.domain.conversation_context import ConversationState, ResolvedReferent
+
+    agents = configure_worker(monkeypatch, job_sessions)
+    with local_conversation(job_sessions, "rag") as (cid, pid):
+        with job_sessions() as session:
+            anchor = Message(
+                conversation_id=cid, role="assistant", ordinal=0, content="Dataset A and Dataset B."
+            )
+            session.add(anchor)
+            session.flush()
+            session.add(
+                Message(
+                    conversation_id=cid, role="user", ordinal=100, content="Later unrelated notes."
+                )
+            )
+            session.add(
+                ConversationSummary(
+                    conversation_id=cid,
+                    through_ordinal=90,
+                    version=1,
+                    content="Unverified summary with old entity clipped.",
+                    metadata_json={"source_message_ids": []},
+                )
+            )
+            state = ConversationState(
+                through_ordinal=1,
+                resolved_entities=[
+                    ResolvedReferent(
+                        mention="it",
+                        resolved_text="Dataset A",
+                        source_kind="message",
+                        source_id=anchor.id,
+                    )
+                ],
+            )
+            session.add(
+                ConversationStateRecord(
+                    conversation_id=cid, through_ordinal=1, version=1, content=state.model_dump()
+                )
+            )
+            session.commit()
+            anchor_id = anchor.id
+        rid = queued_turn(job_sessions, cid, pid, "How many participants does it contain?")
+        await worker.execute_async(rid)
+        with job_sessions() as session:
+            run = session.get(Run, rid)
+            assert run is not None and run.status == "completed" and run.result
+            assert run.result["conversation_context"]["used_message_ids"] == [anchor_id]
+            assert "120 participants" in run.result["answer"]
+            state_record = session.get(ConversationStateRecord, cid)
+            assert state_record is not None and state_record.version == 2
+            assert state_record.content["scientific_evidence"] is False
+        assert "resolved_intent_entities_not_evidence" in agents["retriever"].payloads[0][1]
+        assert "resolved_intent_entities_not_evidence" not in agents["analyst"].payloads[0][1]

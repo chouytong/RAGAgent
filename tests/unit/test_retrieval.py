@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from ragagent.domain.documents import SourceContext, SourceSpan
 from ragagent.domain.research import (
+    CitationValidation,
     Claim,
     ClaimEvidencePair,
     ClaimVerdict,
@@ -68,10 +69,14 @@ async def test_semantic_rejection_missing_aspect_and_verifier_omission() -> None
     assert not omitted.valid
 
 
-def test_gate_diversity_and_citations() -> None:
+def test_gate_defers_comparison_support_to_citation_validation() -> None:
     assert evidence_gate(QueryPlan(queries=["q"]), []).status == Sufficiency.INSUFFICIENT
+    comparison = QueryPlan(queries=["q"], question_type="comparison")
+    # A usable single-paper source must reach analysis; entity/claim support is
+    # checked after review, rather than rejected using paper-count diversity.
+    assert evidence_gate(comparison, [evidence()]).status == Sufficiency.SUFFICIENT
     assert (
-        evidence_gate(QueryPlan(queries=["q"], question_type="comparison"), [evidence()]).status
+        evidence_gate(comparison, [evidence()], CitationValidation(valid=True)).status
         == Sufficiency.PARTIAL
     )
     claim = Claim(claim_id="c", text="Fact", evidence_ids=[evidence().evidence_id])

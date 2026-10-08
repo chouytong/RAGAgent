@@ -35,18 +35,22 @@ async def test_actual_sdk_adapter_contract_with_mock_transport(
     assert "test-only-not-a-real-key" not in provider.model.model_dump_json()
 
 
-async def test_provider_raw_exception_does_not_escape(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("backend", ["openai", "anthropic", "deepseek", "ollama_chat"])
+async def test_provider_raw_exception_does_not_escape(
+    monkeypatch: pytest.MonkeyPatch, backend: str, caplog: pytest.LogCaptureFixture
+) -> None:
     import litellm
 
     async def fail(**kwargs: Any) -> Any:
-        raise RuntimeError("raw transport content must be hidden")
+        raise RuntimeError("sk-" + "TESTSECRET" * 4 + " raw transport content must be hidden")
 
     monkeypatch.setenv("UNIT_TEST_PROVIDER_KEY", "test-only-not-a-real-key")
     monkeypatch.setattr(litellm, "acompletion", fail)
     provider = LiteLLMProvider(
-        AgentModel(provider="openai", model="test", api_key_env="UNIT_TEST_PROVIDER_KEY")
+        AgentModel(provider=backend, model="test", api_key_env="UNIT_TEST_PROVIDER_KEY")
     )
     with pytest.raises(ProviderError) as error:
         await provider.complete("test", {}, HealthResult)
     assert error.value.code == "provider_request_or_schema_failed"
     assert "raw transport" not in str(error.value)
+    assert "TESTSECRET" not in caplog.text + str(error.value) + provider.model.model_dump_json()

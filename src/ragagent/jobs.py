@@ -6,10 +6,12 @@ from typing import Protocol, cast
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+from ragagent.conversations.presentation import message_presentation
 from ragagent.db.dispatch import JobDispatch
 from ragagent.db.models import Conversation, ExecutionEvent, Message, Paper, Run
 from ragagent.domain.conversation import MessageStatus
 from ragagent.errors import ApplicationError
+from ragagent.queues import freeze_queue
 from ragagent.settings import get_settings
 
 TERMINAL_STATUSES = {"completed", "insufficient_evidence", "failed", "cancelled"}
@@ -86,9 +88,13 @@ def dispatch_run(session: Session, queue: DispatchQueue, run_id: str) -> bool:
         return False
     dispatch.attempts += 1
     timeout = freeze_job_timeout(run)
+    selected_queue = freeze_queue(run)
     try:
+        routed_submit = getattr(queue, "submit_for_run", None)
         timed_submit = getattr(queue, "submit_with_timeout", None)
-        if timed_submit is not None:
+        if routed_submit is not None:
+            routed_submit(run_id, selected_queue, timeout)
+        elif timed_submit is not None:
             timed_submit(run_id, timeout)
         else:
             queue.submit(run_id)
@@ -164,6 +170,10 @@ def sync_assistant_message(session: Session, run: Run) -> None:
         message.content = str(result.get("answer") or result.get("draft_report") or "")
         if not message.content:
             raise ApplicationError("conversation_answer_missing")
+        message.metadata_json = {
+            **message.metadata_json,
+            "presentation": message_presentation(result),
+        }
     elif run.status == "insufficient_evidence":
         message.content = "Insufficient verified literature evidence to answer this question."
     elif run.status == "failed":

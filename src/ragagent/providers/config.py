@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
+from ragagent.domain.privacy import SensitiveInput
 from ragagent.errors import ConfigurationError
 from ragagent.providers.environment import runtime_value
 
@@ -13,7 +14,7 @@ MODEL_ENVIRONMENT = re.compile(r"[A-Z][A-Z0-9_]*_MODEL")
 SENSITIVE_ENVIRONMENT_PARTS = {"KEY", "SECRET", "PASSWORD", "TOKEN", "CREDENTIAL", "CREDENTIALS"}
 
 
-class AgentModel(BaseModel):
+class AgentModel(SensitiveInput):
     provider: Literal["openai", "anthropic", "deepseek", "ollama_chat", "openai_compatible"]
     model: str = Field(min_length=1)
     api_base: str | None = None
