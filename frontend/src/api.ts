@@ -86,6 +86,9 @@ export const Run = z.object({
   result: Result.nullable(),
 });
 export type Run = z.infer<typeof Run>;
+/** Lightweight list/turn state. Scientific evidence stays in the Run detail API. */
+export const RunSummary = Run.omit({ result: true });
+export type RunSummary = z.infer<typeof RunSummary>;
 export const Event = z.object({
   node: z.string(),
   payload: z.record(z.string(), z.unknown()),
@@ -172,14 +175,17 @@ export const Message = z.object({
   metadata: z.record(z.string(), z.unknown()),
   created_at: z.string(),
   updated_at: z.string(),
-  run: Run.nullable(),
+  run: RunSummary.nullable(),
+  retry_of_message_id: z.string().nullable().default(null),
+  attempt_number: z.number().int().positive().default(1),
+  is_effective: z.boolean().default(true),
 });
 export type Message = z.infer<typeof Message>;
 export const Turn = z.object({
   conversation: Conversation,
   user_message: Message,
   assistant_message: Message,
-  run: Run,
+  run: RunSummary,
 });
 export const Summary = z.object({
   conversation_id: z.string(),

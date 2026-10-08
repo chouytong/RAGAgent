@@ -76,6 +76,7 @@ export type StreamCallbacks = {
   onExecution: (data: string, lastEventId: string) => void;
   onDone: (data: string) => void;
   onError: (error: string) => void;
+  onOpen?: () => void;
 };
 type NativeEvent =
   | { event: "execution"; data: string; id: string }
@@ -87,6 +88,7 @@ export function stream(path: string, callbacks: StreamCallbacks): () => void {
     throw new Error("invalid_event_cursor");
   if (!isDesktop()) {
     const source = new EventSource(`${path}?after=${after}`);
+    source.onopen = () => callbacks.onOpen?.();
     source.addEventListener("execution", (event) => {
       const message = event as MessageEvent<string>;
       callbacks.onExecution(message.data, message.lastEventId);

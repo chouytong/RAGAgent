@@ -74,6 +74,12 @@ Reviewer Result and limitations. Reloading the Web UI or restarting the desktop
 reads conversations and messages from PostgreSQL; browser `localStorage` is not
 the conversation store. A URL fragment identifies the selected conversation.
 
+The UI initially reads the latest 50 lightweight messages and loads older history
+on request. SSE drives live progress; reconnect/resume reconciles new messages and
+active placeholders. Run, trace and evidence details load when opened, rather than
+with every history refresh. Superseded retry attempts remain audit records and
+leave the context used for subsequent questions.
+
 Each turn creates messages and an existing Run/durable dispatch intent together.
 The worker persists the released assistant answer with the terminal Run/event;
 SSE reconnects replay persisted execution events. Duplicate submissions use a

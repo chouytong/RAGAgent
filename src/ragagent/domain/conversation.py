@@ -114,15 +114,22 @@ class MemoryCreate(BaseModel):
         return self
 
 
-class RunSnapshot(BaseModel):
+class RunSummary(BaseModel):
+    """Small execution identity/status; full results are fetched from the Run API."""
+
     model_config = ConfigDict(from_attributes=True)
     id: str
     kind: str
     status: str
     trace_id: str
     error_code: str | None = None
-    result: dict[str, Any] | None = None
     created_at: datetime
+
+
+class RunSnapshot(RunSummary):
+    """Compatibility detail contract; conversation endpoints use RunSummary."""
+
+    result: dict[str, Any] | None = None
 
 
 class ConversationResponse(BaseModel):
@@ -136,7 +143,7 @@ class ConversationResponse(BaseModel):
     active_run_id: str | None = None
 
 
-class MessageResponse(BaseModel):
+class MessageSummary(BaseModel):
     id: str
     conversation_id: str
     role: MessageRole
@@ -150,14 +157,18 @@ class MessageResponse(BaseModel):
     metadata: dict[str, Any]
     created_at: datetime
     updated_at: datetime
-    run: RunSnapshot | None = None
+    run: RunSummary | None = None
+
+
+class MessageResponse(MessageSummary):
+    """Compatibility import for callers migrating to MessageSummary."""
 
 
 class TurnResponse(BaseModel):
     conversation: ConversationResponse
-    user_message: MessageResponse
-    assistant_message: MessageResponse
-    run: RunSnapshot
+    user_message: MessageSummary
+    assistant_message: MessageSummary
+    run: RunSummary
 
 
 class SummaryResponse(BaseModel):

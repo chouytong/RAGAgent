@@ -2,7 +2,7 @@
 
 日期：2026-10-07（UTC）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
 
-本报告是阶段记录。Phase 1 的实现和已执行检查如下；**Phase 2–8 均为 PENDING**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
+本报告是阶段记录。Phase 1–2 的实现和已执行检查如下；**Phase 3–8 均为 PENDING**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
 
 ## A. Initial Findings
 
@@ -39,7 +39,8 @@
 | 比较正确性 | paper_count≥2 才进入分析 | 可用原文进入分析；reviewer 显式实体支持和 citation pair 检查；paper_count 仅诊断 | 已实现，完整工程检查继续 |
 | Retry | metadata 记录重试，无 effective lineage | 新增 retry_of_message_id、attempt_number、is_effective；summary 排除过期 attempt | 已实现，迁移/回归见 C/J |
 | 删除 | 数据库 cascade，未撤销外部排队任务 | 删除 commit 后 best-effort queue cancel；late write guard 保留 | 已实现，race 回归见 J |
-| 消息、队列、Memory、认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 2–8 PENDING** |
+| 消息与前端刷新 | 完整 Run 随所有消息重复序列化；活跃任务每 4 秒全历史刷新 | 标量 RunSummary 投影，最近 50/双向 ordinal cursor；SSE 为主，active placeholder 单条对账；Run/Evidence lazy load | Phase 2 已实现，After 实测待写入 |
+| 队列、Memory、认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 3–8 PENDING** |
 
 保留独立 RAG/Research Graph、PostgreSQL/pgvector、Redis/RQ、Knowledge Base、PDF/arXiv ingestion、SSE、Evaluation、Multi-provider、Tauri 和 Web fallback。没有从零重写或用大型基础设施替换现有组件。
 
@@ -139,7 +140,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## K. Known Limitations
 
-- **Phase 2–8 未完成**；现有消息载荷/全量轮询、单队列、Memory 选择、Local API auth、Windows 工程化等仍需实施并重新测试。
+- **Phase 3–8 未完成**；单队列、Memory 选择、Local API auth、Windows 工程化等仍需实施并重新测试。
 - semantic verifier 是 model-based 检查，可能判断错误；source-grounded 名字与 exact substring 不等于科研结论正确，最终结论需人工复核。
 - summary 为有损 extractive；改写输入预算不是总费用上限。取消/删除不能撤回已经发出的远端请求或保证零费用。
 - Before 性能数据仅合成 API fixture，After、实际 UI 长对话、队列隔离和真实多语言检索质量尚未测量；不生成推断指标。
@@ -148,4 +149,27 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## L. Future Work
 
-Phase 2–8 属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
+Phase 3–8 属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
+
+
+### Phase 2 checks (2026-10-08 Asia/Shanghai)
+
+消息 API 分离 `MessageSummary` / `RunSummary`，GET 仅选择 Run 的标量白名单列；
+POST send/retry 回包也不携带完整 result。默认最新 50，旧显式 offset 兼容；
+新增 before/after ordinal 和单条消息读取，列表及单条接口引用详情都按需加载。
+conversation list 批量读取 active Run IDs，避免 N+1。终态 Message metadata
+仅保留有上限的 notes、经过最终 claim/pair/exact-span 检查的 citation ID/page refs
+和简短 query 信息；旧记录保持完整 Run detail 可读，不强制全表回填。
+
+Tasks 从 845 行拆出历史侧栏、消息列表、Composer、ResultPanel 与两项数据/SSE hooks。
+健康 SSE 不触发周期消息轮询；断线、应用恢复、同 ordinal 终态变化有增量对账。
+原 26 个浏览器用例均保留，新加大历史 lazy-citation 和 healthy-SSE/lost-done 回归。
+旧 201 条 user 历史断言改为先最新页、显式上翻后仍验证完整 201 条，未减少覆盖。
+
+实际：Ruff format/lint、mypy 65 source files；真实 PG/Redis 全量 **522 passed**
+（3 upstream warnings）；npm ci/lint/check/build；**8 transport + 28 Playwright passed**；
+Rust fmt/locked check/test/clippy **8 passed、0 ignored**；Linux Tauri release build PASS。
+Compose config、frontend 镜像 build PASS；backend 镜像重建与完整 health/ready
+**NOT EXECUTED**：已确认 VFS/32 GB 配额，只剩不足 2 GB，上一阶段创建后端容器已触发
+ENOSPC。这不是部署通过。Windows/真实模型科学验收仍 NOT EXECUTED。
+After benchmark 将对该已提交代码在独立数据库实跑，完成前不声称改善幅度。

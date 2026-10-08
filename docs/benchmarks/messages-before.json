@@ -1,0 +1,2610 @@
+{
+  "kind": "message_api_performance",
+  "label": "before",
+  "warning": "SYNTHETIC API PERFORMANCE FIXTURE / NOT SCIENTIFIC RETRIEVAL QUALITY",
+  "fixture_version": "messages-api-perf-v1",
+  "fixture_source_sha256": "854b8f87b8ff61a81994b56b64ab266e4b357ac4c7cb4cd2974ccd0bebfef1d7",
+  "source_commit": "ba04246c82f556753c36980e76cf64360ca533ce",
+  "timestamp": "2026-10-07T07:29:16.773725+00:00",
+  "python_version": "3.12.14",
+  "postgres_version": "17.10 (Debian 17.10-1.pgdg12+1)",
+  "pgvector_version": "0.8.2",
+  "transport": "FastAPI TestClient ASGI + real PostgreSQL TCP; no network HTTP/TLS",
+  "scope": "DB query + Python serialization + ASGI transport; not browser rendering/model latency",
+  "warmup_requests_per_case": 3,
+  "measured_requests_per_case": 15,
+  "observations": [
+    {
+      "mode": "rag",
+      "total_messages": 10,
+      "request_kind": "full_history",
+      "limit": 10,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 5,
+        "stored_result_json_bytes": 251071,
+        "stored_result_hash": "d5057b6a6a09d07b14c55a595b203fb09f34bb5927c349491b5ce889d79f0692",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 15.35687,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.759766,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.017573,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 15.169346,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.904784,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.10484,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.978242,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.243034,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.131119,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.213634,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 16.300744,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 17.110159,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 18.109691,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 27.866482,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.49215,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 14.49215,
+        "latency_mean_ms": 15.717228933333335,
+        "latency_p95_ms": 27.866482,
+        "response_bytes": 510886,
+        "select_count": 12,
+        "run_result_select_count": 10
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 10,
+      "request_kind": "tail_window_20",
+      "limit": 10,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 5,
+        "stored_result_json_bytes": 251071,
+        "stored_result_hash": "d5057b6a6a09d07b14c55a595b203fb09f34bb5927c349491b5ce889d79f0692",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 14.402879,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 16.085072,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.946552,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.528777,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.575931,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.981105,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.506567,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.029427,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.817066,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.805781,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.396271,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.532668,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 16.532643,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.004238,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 16.149895,
+          "response_bytes": 510886,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 13.946552,
+        "latency_mean_ms": 14.0863248,
+        "latency_p95_ms": 16.532643,
+        "response_bytes": 510886,
+        "select_count": 12,
+        "run_result_select_count": 10
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 10,
+      "request_kind": "single_message",
+      "limit": 1,
+      "offset": 9,
+      "fixture": {
+        "stored_run_count": 5,
+        "stored_result_json_bytes": 251071,
+        "stored_result_hash": "d5057b6a6a09d07b14c55a595b203fb09f34bb5927c349491b5ce889d79f0692",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 8.204328,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.497869,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.255159,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.800833,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.36273,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.86536,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.709058,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.22969,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.95137,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.166234,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.682634,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.368694,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.874793,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.347157,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.996232,
+          "response_bytes": 51436,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 5.347157,
+        "latency_mean_ms": 5.487476066666667,
+        "latency_p95_ms": 8.204328,
+        "response_bytes": 51436,
+        "select_count": 3,
+        "run_result_select_count": 1
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 50,
+      "request_kind": "full_history",
+      "limit": 50,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 25,
+        "stored_result_json_bytes": 1255351,
+        "stored_result_hash": "5a3ba48a323714caff7c01e6d1f97d3aec28841b85805ca5e9a9ae62789ceb59",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 111.652669,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 50.065904,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 46.23505,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 46.55386,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 46.847028,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 45.434112,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 43.250567,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 43.700501,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 49.677197,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 46.548898,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 109.27271,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 46.164143,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 45.688239,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 49.471973,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 50.080832,
+          "response_bytes": 2554466,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 46.55386,
+        "latency_mean_ms": 55.37624553333333,
+        "latency_p95_ms": 111.652669,
+        "response_bytes": 2554466,
+        "select_count": 52,
+        "run_result_select_count": 50
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 50,
+      "request_kind": "tail_window_20",
+      "limit": 20,
+      "offset": 30,
+      "fixture": {
+        "stored_run_count": 25,
+        "stored_result_json_bytes": 1255351,
+        "stored_result_hash": "5a3ba48a323714caff7c01e6d1f97d3aec28841b85805ca5e9a9ae62789ceb59",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 20.740837,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.01795,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.340345,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.980627,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 20.096204,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.264262,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.011468,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 74.045041,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.472965,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.340927,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 20.031291,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 17.917623,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.734955,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.112527,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 23.534636,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 21.340927,
+        "latency_mean_ms": 24.8427772,
+        "latency_p95_ms": 74.045041,
+        "response_bytes": 1021791,
+        "select_count": 22,
+        "run_result_select_count": 20
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 50,
+      "request_kind": "single_message",
+      "limit": 1,
+      "offset": 49,
+      "fixture": {
+        "stored_run_count": 25,
+        "stored_result_json_bytes": 1255351,
+        "stored_result_hash": "5a3ba48a323714caff7c01e6d1f97d3aec28841b85805ca5e9a9ae62789ceb59",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 4.899321,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.717572,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.937209,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.773311,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.75857,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.423272,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.819995,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.111061,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.39436,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.489453,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.554586,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.094205,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.98422,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.486347,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.179084,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 4.937209,
+        "latency_mean_ms": 4.974837733333334,
+        "latency_p95_ms": 5.819995,
+        "response_bytes": 51437,
+        "select_count": 3,
+        "run_result_select_count": 1
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 100,
+      "request_kind": "full_history",
+      "limit": 100,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 50,
+        "stored_result_json_bytes": 2510701,
+        "stored_result_hash": "5bfc154793af018bbb0e315fea3889c5bdbda6777a90ade45fa7bd648fac8032",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 83.911737,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 93.345851,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 95.27105,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 173.739034,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 84.477969,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 103.736815,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 88.474764,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 190.526693,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 163.38617,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 90.777232,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 93.218891,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 92.657745,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 91.356242,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 165.963934,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 94.32138,
+          "response_bytes": 5108941,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 93.345851,
+        "latency_mean_ms": 113.67770046666666,
+        "latency_p95_ms": 190.526693,
+        "response_bytes": 5108941,
+        "select_count": 102,
+        "run_result_select_count": 100
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 100,
+      "request_kind": "tail_window_20",
+      "limit": 20,
+      "offset": 80,
+      "fixture": {
+        "stored_run_count": 50,
+        "stored_result_json_bytes": 2510701,
+        "stored_result_hash": "5bfc154793af018bbb0e315fea3889c5bdbda6777a90ade45fa7bd648fac8032",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 21.920862,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 26.050914,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 23.21182,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 24.374068,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 23.718519,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.836243,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 26.763624,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.045577,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 18.945173,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.698132,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.05095,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.46294,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.774216,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.318974,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.080134,
+          "response_bytes": 1021791,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 21.920862,
+        "latency_mean_ms": 22.550143066666667,
+        "latency_p95_ms": 26.763624,
+        "response_bytes": 1021791,
+        "select_count": 22,
+        "run_result_select_count": 20
+      }
+    },
+    {
+      "mode": "rag",
+      "total_messages": 100,
+      "request_kind": "single_message",
+      "limit": 1,
+      "offset": 99,
+      "fixture": {
+        "stored_run_count": 50,
+        "stored_result_json_bytes": 2510701,
+        "stored_result_hash": "5bfc154793af018bbb0e315fea3889c5bdbda6777a90ade45fa7bd648fac8032",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 5.695569,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.925361,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.970268,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 6.093223,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.673165,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.459486,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.0076,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.498441,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.425626,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.997258,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.229806,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.615131,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 6.44927,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 7.094198,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.341289,
+          "response_bytes": 51437,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 5.498441,
+        "latency_mean_ms": 5.631712733333333,
+        "latency_p95_ms": 7.094198,
+        "response_bytes": 51437,
+        "select_count": 3,
+        "run_result_select_count": 1
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 10,
+      "request_kind": "full_history",
+      "limit": 10,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 5,
+        "stored_result_json_bytes": 251071,
+        "stored_result_hash": "d5057b6a6a09d07b14c55a595b203fb09f34bb5927c349491b5ce889d79f0692",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 12.961165,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 15.3112,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.528891,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.204751,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 15.25769,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.723965,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.738156,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.697506,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.916857,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 11.306899,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 17.835769,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.011901,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.781092,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.682283,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 15.86466,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 13.781092,
+        "latency_mean_ms": 14.188185666666666,
+        "latency_p95_ms": 17.835769,
+        "response_bytes": 510936,
+        "select_count": 12,
+        "run_result_select_count": 10
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 10,
+      "request_kind": "tail_window_20",
+      "limit": 10,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 5,
+        "stored_result_json_bytes": 251071,
+        "stored_result_hash": "d5057b6a6a09d07b14c55a595b203fb09f34bb5927c349491b5ce889d79f0692",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 12.353103,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.272461,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.933841,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.242335,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.159245,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.316031,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 11.666937,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 11.49985,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 12.04958,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.685541,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 15.317686,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 14.960721,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 16.330128,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.551536,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        },
+        {
+          "latency_ms": 13.775793,
+          "response_bytes": 510936,
+          "returned_messages": 10,
+          "sql_statement_count": 12,
+          "select_count": 12,
+          "run_result_select_count": 10
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 12.353103,
+        "latency_mean_ms": 13.340985866666667,
+        "latency_p95_ms": 16.330128,
+        "response_bytes": 510936,
+        "select_count": 12,
+        "run_result_select_count": 10
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 10,
+      "request_kind": "single_message",
+      "limit": 1,
+      "offset": 9,
+      "fixture": {
+        "stored_run_count": 5,
+        "stored_result_json_bytes": 251071,
+        "stored_result_hash": "d5057b6a6a09d07b14c55a595b203fb09f34bb5927c349491b5ce889d79f0692",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 4.864379,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.956478,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.688424,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.941635,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.808164,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.946242,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.481802,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.782004,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.84498,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.328631,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.903819,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.500159,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.685419,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.345645,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.400459,
+          "response_bytes": 51441,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 4.808164,
+        "latency_mean_ms": 4.765216,
+        "latency_p95_ms": 5.345645,
+        "response_bytes": 51441,
+        "select_count": 3,
+        "run_result_select_count": 1
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 50,
+      "request_kind": "full_history",
+      "limit": 50,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 25,
+        "stored_result_json_bytes": 1255351,
+        "stored_result_hash": "5a3ba48a323714caff7c01e6d1f97d3aec28841b85805ca5e9a9ae62789ceb59",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 45.622262,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 47.757257,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 43.334244,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 46.773884,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 46.54311,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 50.44737,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 43.325781,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 104.982467,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 42.895376,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 40.542977,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 42.031943,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 43.543629,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 42.881506,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 44.878167,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        },
+        {
+          "latency_ms": 43.208554,
+          "response_bytes": 2554716,
+          "returned_messages": 50,
+          "sql_statement_count": 52,
+          "select_count": 52,
+          "run_result_select_count": 50
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 43.543629,
+        "latency_mean_ms": 48.58456846666667,
+        "latency_p95_ms": 104.982467,
+        "response_bytes": 2554716,
+        "select_count": 52,
+        "run_result_select_count": 50
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 50,
+      "request_kind": "tail_window_20",
+      "limit": 20,
+      "offset": 30,
+      "fixture": {
+        "stored_run_count": 25,
+        "stored_result_json_bytes": 1255351,
+        "stored_result_hash": "5a3ba48a323714caff7c01e6d1f97d3aec28841b85805ca5e9a9ae62789ceb59",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 88.724513,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 20.392461,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 20.709795,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 20.77281,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 20.685568,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 25.095631,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.455208,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 19.895436,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 54.208124,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 25.311117,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 21.532696,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.148585,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 23.187874,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.673267,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 19.046375,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 22.148585,
+        "latency_mean_ms": 28.455964,
+        "latency_p95_ms": 88.724513,
+        "response_bytes": 1021891,
+        "select_count": 22,
+        "run_result_select_count": 20
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 50,
+      "request_kind": "single_message",
+      "limit": 1,
+      "offset": 49,
+      "fixture": {
+        "stored_run_count": 25,
+        "stored_result_json_bytes": 1255351,
+        "stored_result_hash": "5a3ba48a323714caff7c01e6d1f97d3aec28841b85805ca5e9a9ae62789ceb59",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 4.737858,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 6.756324,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.60035,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.307738,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.887564,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.769706,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.413147,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.637106,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.745729,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.036348,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.861855,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.391685,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.581552,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 4.827554,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.144401,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 4.887564,
+        "latency_mean_ms": 5.113261133333333,
+        "latency_p95_ms": 6.756324,
+        "response_bytes": 51442,
+        "select_count": 3,
+        "run_result_select_count": 1
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 100,
+      "request_kind": "full_history",
+      "limit": 100,
+      "offset": 0,
+      "fixture": {
+        "stored_run_count": 50,
+        "stored_result_json_bytes": 2510701,
+        "stored_result_hash": "5bfc154793af018bbb0e315fea3889c5bdbda6777a90ade45fa7bd648fac8032",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 98.737351,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 102.783985,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 169.762145,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 103.453811,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 108.276267,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 134.926504,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 96.978111,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 190.797731,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 107.401611,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 116.842866,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 113.05079,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 94.283641,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 177.962642,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 118.765361,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        },
+        {
+          "latency_ms": 99.121016,
+          "response_bytes": 5109441,
+          "returned_messages": 100,
+          "sql_statement_count": 102,
+          "select_count": 102,
+          "run_result_select_count": 100
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 108.276267,
+        "latency_mean_ms": 122.2095888,
+        "latency_p95_ms": 190.797731,
+        "response_bytes": 5109441,
+        "select_count": 102,
+        "run_result_select_count": 100
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 100,
+      "request_kind": "tail_window_20",
+      "limit": 20,
+      "offset": 80,
+      "fixture": {
+        "stored_run_count": 50,
+        "stored_result_json_bytes": 2510701,
+        "stored_result_hash": "5bfc154793af018bbb0e315fea3889c5bdbda6777a90ade45fa7bd648fac8032",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 29.792038,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 26.286228,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 26.203473,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 22.901662,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 25.932335,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 95.056093,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 24.473935,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 26.490507,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 28.735188,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 52.722589,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 43.237213,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 30.984157,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 38.457722,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 28.272345,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        },
+        {
+          "latency_ms": 56.25266,
+          "response_bytes": 1021891,
+          "returned_messages": 20,
+          "sql_statement_count": 22,
+          "select_count": 22,
+          "run_result_select_count": 20
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 28.735188,
+        "latency_mean_ms": 37.05320966666667,
+        "latency_p95_ms": 95.056093,
+        "response_bytes": 1021891,
+        "select_count": 22,
+        "run_result_select_count": 20
+      }
+    },
+    {
+      "mode": "research",
+      "total_messages": 100,
+      "request_kind": "single_message",
+      "limit": 1,
+      "offset": 99,
+      "fixture": {
+        "stored_run_count": 50,
+        "stored_result_json_bytes": 2510701,
+        "stored_result_hash": "5bfc154793af018bbb0e315fea3889c5bdbda6777a90ade45fa7bd648fac8032",
+        "evidence_per_run": 8,
+        "trace_entries_per_run": 40
+      },
+      "samples": [
+        {
+          "latency_ms": 5.587695,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 7.262196,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.916847,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.630705,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 5.109098,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 8.157377,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 7.797424,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 7.321677,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 8.330068,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 6.31023,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 7.583842,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 6.082016,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 7.81745,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 6.159904,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        },
+        {
+          "latency_ms": 6.114796,
+          "response_bytes": 51442,
+          "returned_messages": 1,
+          "sql_statement_count": 3,
+          "select_count": 3,
+          "run_result_select_count": 1
+        }
+      ],
+      "summary": {
+        "latency_median_ms": 6.31023,
+        "latency_mean_ms": 6.745421666666667,
+        "latency_p95_ms": 8.330068,
+        "response_bytes": 51442,
+        "select_count": 3,
+        "run_result_select_count": 1
+      }
+    }
+  ]
+}

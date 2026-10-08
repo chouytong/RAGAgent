@@ -746,3 +746,30 @@ asserting exactly one queue submission, and repeats reconciliation to verify
 idempotency. This retains the strict enqueue-count assertion when immediate
 skip_locked dispatch legitimately waits for another transaction. Migration tests
 resolve Alembic's current head and preserve legacy schema/data assertions.
+
+
+## Engineering hardening — Phase 2 (2026-10-08 Asia/Shanghai)
+
+Lightweight MessageSummary/RunSummary projections and the latest-50/before/after
+ordinal API replace embedded full results. Single-message reconciliation handles
+status updates at an unchanged ordinal; explicit legacy offset remains supported.
+Conversation active IDs use one batch query. Bounded display metadata keeps only
+final supported citation references, never quote/trace/draft text. Run details stay
+available through GET /api/runs/{id} and are loaded on demand.
+
+Tasks now uses history/message/composer/result components and separate message/SSE
+hooks. Healthy SSE has no periodic message-history poll; reconnection/resume and
+lost-final-event recovery read only new messages and active placeholders. Retry
+audit attempts remain collapsible. Both English and Chinese README editions were
+updated with identical behavior, along with API/data-model documentation.
+
+Actual checks: Ruff format/lint, mypy (65 source files), 522 Python tests with real
+PostgreSQL/pgvector and Redis; npm ci/lint/check/build, 8 transport tests and 28
+Playwright tests (all original 26 retained); Rust fmt/check/test/clippy with locks
+(8 tests), and Linux Tauri release build passed. Compose config and frontend image
+build passed. Backend image rebuild/full Compose health/ready NOT EXECUTED because
+the environment's proven 32 GB VFS quota left insufficient space for its 2 GB
+backend image/containers. Windows and real-model scientific acceptance NOT
+EXECUTED. Raw before benchmarks and the repeatable measurement script are kept
+in docs/benchmarks and scripts; after measurements will follow this implementation
+commit so the manifest identifies the code actually tested.

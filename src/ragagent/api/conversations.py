@@ -2,8 +2,8 @@
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException
-from sqlalchemy import delete, func, select
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import Row, Select, delete, func, select
 from sqlalchemy.orm import Session
 
 from ragagent.api.papers import DB, QueueDep
@@ -26,9 +26,9 @@ from ragagent.domain.conversation import (
     MemoryCreate,
     MemoryResponse,
     MessageCreate,
-    MessageResponse,
+    MessageSummary,
     RetryMessage,
-    RunSnapshot,
+    RunSummary,
     SummaryResponse,
     TurnResponse,
 )
@@ -37,6 +37,7 @@ from ragagent.jobs import dispatch_run, sync_assistant_message
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 ACTIVE_STATUSES = ("queued", "running")
+MAX_ORDINAL = 2147483647
 
 
 def get_conversation(db: Session, conversation_id: str, *, lock: bool = False) -> Conversation:
@@ -62,7 +63,7 @@ def require_idle(db: Session, conversation_id: str) -> None:
         raise HTTPException(409, "conversation_busy")
 
 
-def conversation_response(db: Session, conversation: Conversation) -> ConversationResponse:
+def conversation_summary(conversation: Conversation, active_id: str | None) -> ConversationResponse:
     return ConversationResponse(
         id=conversation.id,
         title=conversation.title,
@@ -71,13 +72,50 @@ def conversation_response(db: Session, conversation: Conversation) -> Conversati
         metadata=conversation.metadata_json,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
-        active_run_id=active_run_id(db, conversation.id),
+        active_run_id=active_id,
     )
 
 
-def message_response(db: Session, message: Message) -> MessageResponse:
-    run = db.get(Run, message.run_id) if message.run_id is not None else None
-    return MessageResponse(
+def conversation_response(db: Session, conversation: Conversation) -> ConversationResponse:
+    return conversation_summary(conversation, active_run_id(db, conversation.id))
+
+
+def message_selection(
+    conversation_id: str,
+) -> Select[Message, str, str, str, str, str | None, datetime]:
+    # Project individual Run columns rather than loading a Run ORM instance:
+    # SELECT Run would fetch its potentially megabyte-sized request/result too.
+    return (
+        select(
+            Message,
+            Run.id.label("summary_run_id"),
+            Run.kind.label("summary_kind"),
+            Run.status.label("summary_status"),
+            Run.trace_id.label("summary_trace_id"),
+            Run.error_code.label("summary_error_code"),
+            Run.created_at.label("summary_created_at"),
+        )
+        .outerjoin(Run, Run.id == Message.run_id)
+        .where(Message.conversation_id == conversation_id)
+        .execution_options(populate_existing=True)
+    )
+
+
+def message_response(row: Row[Message, str, str, str, str, str | None, datetime]) -> MessageSummary:
+    message = row[0]
+    snapshot = (
+        RunSummary(
+            id=row.summary_run_id,
+            kind=row.summary_kind,
+            status=row.summary_status,
+            trace_id=row.summary_trace_id,
+            error_code=row.summary_error_code,
+            created_at=row.summary_created_at,
+        )
+        if row.summary_run_id is not None
+        else None
+    )
+    return MessageSummary(
         id=message.id,
         conversation_id=message.conversation_id,
         role=message.role,
@@ -91,20 +129,30 @@ def message_response(db: Session, message: Message) -> MessageResponse:
         metadata=message.metadata_json,
         created_at=message.created_at,
         updated_at=message.updated_at,
-        run=RunSnapshot.model_validate(run) if run is not None else None,
+        run=snapshot,
     )
 
 
 def turn_response(db: Session, conversation: Conversation, run: Run) -> TurnResponse:
-    user = db.get(Message, run.request["user_message_id"])
-    assistant = db.get(Message, run.request["assistant_message_id"])
+    messages = {
+        row[0].id: message_response(row)
+        for row in db.execute(
+            message_selection(conversation.id).where(
+                Message.id.in_(
+                    [run.request["user_message_id"], run.request["assistant_message_id"]]
+                )
+            )
+        )
+    }
+    user = messages.get(run.request["user_message_id"])
+    assistant = messages.get(run.request["assistant_message_id"])
     if user is None or assistant is None:
         raise HTTPException(409, "conversation_turn_changed")
     return TurnResponse(
         conversation=conversation_response(db, conversation),
-        user_message=message_response(db, user),
-        assistant_message=message_response(db, assistant),
-        run=RunSnapshot.model_validate(run),
+        user_message=user,
+        assistant_message=assistant,
+        run=RunSummary.model_validate(run),
     )
 
 
@@ -182,13 +230,26 @@ def list_conversations(
     statement = select(Conversation)
     if mode is not None:
         statement = statement.where(Conversation.mode == mode)
-    return [
-        conversation_response(db, conversation)
-        for conversation in db.scalars(
+    conversations = list(
+        db.scalars(
             statement.order_by(Conversation.updated_at.desc(), Conversation.id)
             .limit(limit)
             .offset(offset)
         )
+    )
+    if not conversations:
+        return []
+    active_ids = dict(
+        db.execute(
+            select(Run.conversation_id, Run.id).where(
+                Run.conversation_id.in_([conversation.id for conversation in conversations]),
+                Run.status.in_(ACTIVE_STATUSES),
+            )
+        ).all()
+    )
+    return [
+        conversation_summary(conversation, active_ids.get(conversation.id))
+        for conversation in conversations
     ]
 
 
@@ -256,23 +317,59 @@ def clear_conversation(conversation_id: str, db: DB) -> ConversationResponse:
     return conversation_response(db, conversation)
 
 
-@router.get("/{conversation_id}/messages")
+def validate_message_cursor_query(request: Request) -> None:
+    if any(
+        len(request.query_params.getlist(name)) > 1
+        for name in ("offset", "before_ordinal", "after_ordinal")
+    ):
+        raise HTTPException(422, "message_cursor_conflict")
+
+
+@router.get("/{conversation_id}/messages", dependencies=[Depends(validate_message_cursor_query)])
 def list_messages(
-    conversation_id: str, db: DB, limit: int = 100, offset: int = 0
-) -> list[MessageResponse]:
-    if not 1 <= limit <= 500 or offset < 0:
+    conversation_id: str,
+    db: DB,
+    limit: int = 50,
+    offset: int | None = None,
+    before_ordinal: int | None = None,
+    after_ordinal: int | None = None,
+) -> list[MessageSummary]:
+    if (
+        not 1 <= limit <= 500
+        or (offset is not None and not 0 <= offset <= MAX_ORDINAL)
+        or (before_ordinal is not None and not 0 <= before_ordinal <= MAX_ORDINAL)
+        or (after_ordinal is not None and not 0 <= after_ordinal <= MAX_ORDINAL)
+    ):
         raise HTTPException(422, "invalid_pagination")
+    if sum(value is not None for value in (offset, before_ordinal, after_ordinal)) > 1:
+        raise HTTPException(422, "message_cursor_conflict")
     get_conversation(db, conversation_id)
-    return [
-        message_response(db, message)
-        for message in db.scalars(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.ordinal)
-            .limit(limit)
-            .offset(offset)
-        )
-    ]
+    statement = message_selection(conversation_id)
+    ascending = offset is not None or after_ordinal is not None
+    if before_ordinal is not None:
+        statement = statement.where(Message.ordinal < before_ordinal)
+    elif after_ordinal is not None:
+        statement = statement.where(Message.ordinal > after_ordinal)
+    statement = statement.order_by(Message.ordinal if ascending else Message.ordinal.desc())
+    if offset is not None:
+        # Explicit offset, including offset=0, retains legacy earliest-first
+        # pagination. Omitting it selects the latest bounded window instead.
+        statement = statement.offset(offset)
+    messages = [message_response(row) for row in db.execute(statement.limit(limit))]
+    return messages if ascending else list(reversed(messages))
+
+
+@router.get("/{conversation_id}/messages/{message_id}")
+def read_message(conversation_id: str, message_id: str, db: DB) -> MessageSummary:
+    get_conversation(db, conversation_id)
+    row = db.execute(
+        message_selection(conversation_id).where(Message.id == message_id)
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, "message_not_found")
+    # Incremental append cursors cannot detect a placeholder that transitions at
+    # the same ordinal. SSE/reconnect reconciliation refreshes this exact row.
+    return message_response(row)
 
 
 @router.post("/{conversation_id}/messages", status_code=202)

@@ -1,6 +1,88 @@
 import { expect, test } from "@playwright/test";
 import { completed, done, evidence, run, setupChat } from "./chat-fixtures";
 
+test("latest history stays lightweight and citations load one Run only when opened", async ({
+  page,
+}) => {
+  const chat = await setupChat(page);
+  const conversation = chat.create("MOCK heavy history");
+  for (let index = 0; index < 60; index += 1) {
+    const item = { ...completed, id: crypto.randomUUID() };
+    chat.makeMessage(conversation, "user", `MOCK query ${index}`, item);
+    chat.makeMessage(conversation, "assistant", item.result.answer, item);
+  }
+  await page.goto(`/#/rag/${conversation.id}`);
+  await expect(page.getByLabel("Assistant 消息")).toHaveCount(25);
+  expect(chat.fullRunRequests).toEqual([]);
+  await page.getByRole("button", { name: "文献 · p.7" }).first().click();
+  await expect(page.getByLabel("主引用原文", { exact: true })).toHaveText(
+    evidence.quote,
+  );
+  expect(chat.fullRunRequests).toHaveLength(1);
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await page.getByRole("button", { name: "文献 · p.7" }).first().click();
+  await expect(page.getByLabel("主引用原文", { exact: true })).toHaveText(
+    evidence.quote,
+  );
+  expect(chat.fullRunRequests).toHaveLength(1);
+  expect(chat.messageOffsets).toEqual([]);
+});
+
+test("healthy SSE prevents periodic history polling and lost completion recovers the same message", async ({
+  page,
+}) => {
+  const chat = await setupChat(page, { holdStream: true });
+  await page.addInitScript(() => {
+    class OpenStream {
+      static instances: OpenStream[] = [];
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(_url: string) {
+        OpenStream.instances.push(this);
+        setTimeout(() => this.onopen?.(), 0);
+      }
+      addEventListener() {}
+      close() {}
+    }
+    Object.assign(window, { EventSource: OpenStream });
+  });
+  await page.goto("/#/rag");
+  await page.getByLabel("研究问题").fill("MOCK live query");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "排队中", exact: true }),
+  ).toBeVisible();
+  await expect.poll(() => chat.messageQueries.length).toBeGreaterThan(0);
+  await page.waitForTimeout(100);
+  const baselineRequests = chat.messageQueries.length;
+  await page.waitForTimeout(4500); // Covers the removed four-second normal-history timer.
+  expect(chat.messageQueries).toHaveLength(baselineRequests);
+  expect(chat.fullRunRequests).toEqual([]);
+  const id = [...chat.runs.keys()][0];
+  const message = [...chat.messages.values()][0].find(
+    (item) => item.role === "assistant",
+  )!;
+  chat.completeRun(id);
+  await page.evaluate(() => {
+    const constructor = window.EventSource as unknown as {
+      instances: { onerror: (() => void) | null }[];
+    };
+    constructor.instances.at(-1)?.onerror?.();
+  });
+  await expect(
+    page.getByRole("heading", { name: "证据校验通过", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Assistant 消息")).toHaveCount(1);
+  expect(chat.fullRunRequests).toEqual([]);
+  expect(
+    chat.messageQueries.some((query) => query.includes("after_ordinal")),
+  ).toBe(true);
+  await expect(page.locator(`[data-message-id="${message.id}"]`)).toContainText(
+    "MOCK supported statement",
+  );
+  expect(chat.messageOffsets).toEqual([]);
+});
+
 // MOCK wire-contract fixtures are explicit. Real PostgreSQL persistence,
 // follow-up retrieval and memory isolation are covered by backend tests.
 test("new chat, follow-up, conversation switching, reload and hard deletion preserve the selected history", async ({
@@ -17,14 +99,16 @@ test("new chat, follow-up, conversation switching, reload and hard deletion pres
     .fill("What datasets were used in these MOCK papers?");
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.getByLabel("Assistant 消息")).toHaveCount(1);
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "证据校验通过" }),
+  ).toBeVisible();
   const first = [...chat.conversations.values()][0];
   await page
     .getByLabel("研究问题")
     .fill("Which one has the largest sample size?");
   await page.getByLabel("研究问题").press("Enter");
   await expect(page.getByLabel("Assistant 消息")).toHaveCount(2);
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toHaveCount(
+  await expect(page.getByRole("heading", { name: "证据校验通过" })).toHaveCount(
     2,
   );
   expect(chat.sentBodies[1]?.content).toBe(
@@ -34,7 +118,7 @@ test("new chat, follow-up, conversation switching, reload and hard deletion pres
   await page.getByRole("button", { name: "New Chat", exact: true }).click();
   await page.getByLabel("研究问题").fill("A different MOCK research topic");
   await page.getByRole("button", { name: "发送", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toHaveCount(
+  await expect(page.getByRole("heading", { name: "证据校验通过" })).toHaveCount(
     1,
   );
   await page
@@ -352,7 +436,9 @@ test("New Chat resets visible filters and does not carry the previous query rest
   await composer.getByLabel("year_start", { exact: true }).fill("2023");
   await page.getByLabel("研究问题").fill("MOCK previous constrained question");
   await page.getByRole("button", { name: "发送", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "证据校验通过" }),
+  ).toBeVisible();
   expect(chat.sentBodies[0]?.filters).toMatchObject({
     authors: ["MOCK Alice"],
     datasets: ["MOCK-A"],
@@ -366,7 +452,7 @@ test("New Chat resets visible filters and does not carry the previous query rest
     await expect(composer.getByLabel(name, { exact: true })).toHaveValue("");
   await page.getByLabel("研究问题").fill("MOCK fresh unrestricted question");
   await page.getByRole("button", { name: "发送", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toHaveCount(
+  await expect(page.getByRole("heading", { name: "证据校验通过" })).toHaveCount(
     1,
   );
   expect(chat.sentBodies[1]?.filters).toMatchObject({
@@ -411,7 +497,7 @@ test("an active turn can be cancelled, keeps memory read-only and retries as a n
   });
   await page.getByRole("button", { name: "重试本轮" }).click();
   await expect(
-    page.getByRole("heading", { name: "已验证结果", exact: true }),
+    page.getByRole("heading", { name: "证据校验通过", exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("Assistant 消息")).toHaveCount(2);
   await expect(page.getByLabel("User 消息")).toHaveCount(1);
@@ -447,7 +533,10 @@ test("a failed assistant response remains visible and retry preserves its origin
     });
   });
   await page.getByRole("button", { name: "重试本轮" }).click();
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "证据校验通过" }),
+  ).toBeVisible();
+  await page.getByText(/先前尝试 #1.*审计记录/).click();
   await expect(page.getByRole("heading", { name: "执行失败" })).toBeVisible();
   expect(chat.runs.size).toBe(2);
 });
@@ -481,7 +570,9 @@ test("repeated submission after a network failure reuses the request ID and doub
     "MOCK retry same submission",
   );
   await page.getByRole("button", { name: "发送", exact: true }).dblclick();
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "证据校验通过" }),
+  ).toBeVisible();
   expect(secondKey).toBe(firstKey);
   expect(chat.sends).toBe(1);
   await expect(page.getByLabel("User 消息")).toHaveCount(1);
@@ -509,7 +600,9 @@ test("Enter sends, Shift+Enter inserts a newline and IME composition never submi
   await input.pressSequentially("MOCK second line");
   await expect(input).toHaveValue("MOCK 中文输入\nMOCK second line");
   await input.press("Enter");
-  await expect(page.getByRole("heading", { name: "已验证结果" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "证据校验通过" }),
+  ).toBeVisible();
   expect(chat.sends).toBe(1);
   expect(chat.sentBodies[0]?.content).toBe("MOCK 中文输入\nMOCK second line");
 });
@@ -569,11 +662,23 @@ test("long persisted conversations load later message pages and restore the newe
     completed,
   );
   await page.goto(`/#/rag/${conversation.id}`);
-  await expect(page.getByLabel("User 消息")).toHaveCount(201);
+  await expect(page.getByLabel("User 消息")).toHaveCount(49);
   await expect(page.getByLabel("Assistant 消息")).toContainText(
     "MOCK newest persisted answer",
   );
-  expect(chat.messageOffsets).toContain(200);
+  for (const count of [99, 149, 199, 201]) {
+    await page
+      .getByRole("button", { name: "加载更早消息", exact: true })
+      .click();
+    await expect(page.getByLabel("User 消息")).toHaveCount(count);
+  }
+  await expect(page.getByLabel("Assistant 消息")).toContainText(
+    "MOCK newest persisted answer",
+  );
+  expect(
+    chat.messageQueries.some((query) => query.includes("before_ordinal=152")),
+  ).toBe(true);
+  expect(chat.messageOffsets).toEqual([]);
   await expect(page.getByLabel("研究问题")).toBeEnabled();
 });
 

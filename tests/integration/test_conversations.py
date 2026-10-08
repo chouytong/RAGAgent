@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from redis import Redis
 from rq.job import Job
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -49,6 +49,129 @@ class RecordingQueue:
 
     def submit(self, run_id: str) -> None:
         self.ids.append(run_id)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("count", [10, 50, 100])
+def test_message_windows_do_not_load_heavy_run_results(
+    conversation_client: TestClient, empty_db: Session, count: int
+) -> None:
+    client = conversation_client
+    cid = create(client)
+    run = Run(
+        conversation_id=cid,
+        kind="rag",
+        status="completed",
+        request={"query": "Synthetic performance test"},
+        result={"large": "private fixture" * 100000},
+    )
+    empty_db.add(run)
+    empty_db.flush()
+    rows = [
+        Message(
+            conversation_id=cid,
+            role="user",
+            content=f"Fixture {i}",
+            ordinal=i,
+            run_id=run.id,
+            status="completed",
+        )
+        for i in range(count)
+    ]
+    empty_db.add_all(rows)
+    empty_db.commit()
+    statements: list[str] = []
+
+    def capture(
+        _connection: Any, _cursor: Any, statement: str, _parameters: Any, _context: Any, _many: Any
+    ) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    bind = empty_db.get_bind()
+    event.listen(bind, "before_cursor_execute", capture)
+    try:
+        response = client.get(f"/api/conversations/{cid}/messages")
+    finally:
+        event.remove(bind, "before_cursor_execute", capture)
+    assert response.status_code == 200
+    assert [row["ordinal"] for row in response.json()] == list(range(max(0, count - 50), count))
+    assert len(statements) == 2
+    assert all(
+        "runs.result" not in statement and "runs.request" not in statement
+        for statement in statements
+    )
+    assert all("result" not in row["run"] for row in response.json())
+    assert len(response.content) < 60000
+    assert client.get(f"/api/runs/{run.id}").json()["result"] == run.result
+    latest = rows[-1]
+    single = client.get(f"/api/conversations/{cid}/messages/{latest.id}").json()
+    assert single["id"] == latest.id and "result" not in single["run"]
+
+
+@pytest.mark.integration
+def test_message_cursors_preserve_history_and_detect_same_ordinal_updates(
+    conversation_client: TestClient, empty_db: Session
+) -> None:
+    client = conversation_client
+    cid = create(client)
+    empty_db.add_all(
+        [
+            Message(
+                conversation_id=cid,
+                role="user",
+                content=f"Fixture {i}",
+                ordinal=i,
+                status="completed",
+            )
+            for i in range(120)
+        ]
+    )
+    empty_db.commit()
+    base = f"/api/conversations/{cid}/messages"
+    assert [
+        row["ordinal"] for row in client.get(base + "?limit=50&before_ordinal=70").json()
+    ] == list(range(20, 70))
+    assert [
+        row["ordinal"] for row in client.get(base + "?limit=12&after_ordinal=69").json()
+    ] == list(range(70, 82))
+    assert [row["ordinal"] for row in client.get(base + "?limit=3&offset=0").json()] == [0, 1, 2]
+    assert client.get(base + "?after_ordinal=119").json() == []
+    turn = send(client, cid, "New query")
+    assistant = turn["assistant_message"]
+    assert [row["ordinal"] for row in client.get(base + "?after_ordinal=119").json()] == [120, 121]
+    current = claim_run(empty_db, turn["run"]["id"])
+    assert current is not None
+    current.result, current.status = {"answer": "A final persisted answer."}, "completed"
+    finish_run(empty_db, current)
+    assert client.get(base + "?after_ordinal=121").json() == []
+    updated = client.get(base + f"/{assistant['id']}").json()
+    assert updated["ordinal"] == 121 and updated["status"] == "completed"
+    assert updated["content"] == "A final persisted answer."
+    assert "result" not in updated["run"]
+    assert (
+        client.get(f"/api/conversations/{create(client)}/messages/{assistant['id']}").status_code
+        == 404
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "query",
+    [
+        "before_ordinal=3&after_ordinal=2",
+        "offset=0&after_ordinal=2",
+        "offset=0&before_ordinal=3",
+        "after_ordinal=-1",
+        "before_ordinal=2147483648",
+        "after_ordinal=1&after_ordinal=2",
+    ],
+)
+def test_invalid_message_cursor_combinations_are_rejected(
+    conversation_client: TestClient, query: str
+) -> None:
+    cid = create(conversation_client)
+    assert conversation_client.get(f"/api/conversations/{cid}/messages?{query}").status_code == 422
 
 
 @pytest.fixture
@@ -374,7 +497,9 @@ def test_sse_reconnect_and_restart_read_persisted_assistant(
     assert (
         restored["status"] == "completed" and restored["content"] == "Verified datasets [E:fixture]"
     )
-    assert restored["run"]["result"]["answer"] == restored["content"]
+    assert "result" not in restored["run"]
+    full_run = conversation_client.get(f"/api/runs/{restored['run_id']}").json()
+    assert full_run["result"]["answer"] == restored["content"]
 
 
 @pytest.mark.integration

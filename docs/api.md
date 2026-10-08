@@ -13,7 +13,12 @@ The chat API wraps existing RAG/Research Run creation; it does not replace the
 single-run `/api/rag/query` or `/api/research` endpoints. Conversation mode selects
 the independent graph. New turns return HTTP 202 `TurnResponse` containing
 `conversation`, `user_message`, `assistant_message` and `run`. Message responses
-include a nullable embedded Run snapshot for status/result restoration.
+use `MessageSummary` and a nullable `RunSummary` containing status, trace ID and
+safe error code. Lists, individual messages and send/retry replies exclude Run
+results, evidence text, analysis, plans and execution traces. Read
+`GET /api/runs/{run_id}` for those details on demand. The published answer remains
+in `Message.content`; bounded display metadata may contain limitations and a
+verified citation ID/page index without source text.
 
 | Method and route | Request/result |
 |---|---|
@@ -23,7 +28,8 @@ include a nullable embedded Run snapshot for status/result restoration.
 | PATCH `/api/conversations/{id}` | `{title}` (1–200 characters); renames and disables automatic title. Mode is not mutable. |
 | DELETE `/api/conversations/{id}` | Deletes conversation, messages, associated Runs/events/dispatches, summary and memories. May delete during execution; a late worker cannot publish into deleted records. |
 | POST `/api/conversations/{id}/clear` | No options; deletes the same contents while retaining an empty conversation and resetting its automatic title. Requires idle conversation. |
-| GET `/api/conversations/{id}/messages` | Ordered ascending by unique ordinal; `offset`, `limit` (1–500, default 100). Messages expose role/content/status/Run association and timestamps. |
+| GET `/api/conversations/{id}/messages` | Latest 50 by default, returned ascending by unique ordinal. `limit` 1–500; `before_ordinal` loads an older window, `after_ordinal` appends newer messages. Explicit `offset` (including 0) retains legacy earliest-first paging. Offset and the two cursor directions are mutually exclusive; duplicates/negative cursors return 422. |
+| GET `/api/conversations/{id}/messages/{message_id}` | A single lightweight message in that conversation. Reconciles an active placeholder that changes status at the same ordinal; a new-message cursor alone cannot detect that change. |
 | POST `/api/conversations/{id}/messages` | `{content, client_request_id: UUID, filters?: MetadataFilter}`; atomic user + queued assistant + Run + dispatch creation. Content is 1–10,000 characters. |
 | POST `/api/conversations/{id}/messages/{message_id}/retry` | `{client_request_id: UUID}`; retries only the latest failed/cancelled/insufficient assistant message, preserving the earlier attempt and original user. Creates a new assistant/Run. |
 | GET `/api/conversations/{id}/summary` | Summary content, covered ordinal, version and source message IDs, or null. |
@@ -41,6 +47,14 @@ A conversation with queued/running work rejects a new turn or memory/clear mutat
 with 409 `conversation_busy`. The caller should retain its UUID through an ambiguous
 HTTP failure and replay that submission before inventing a new logical turn. Retry
 is a new attempt and may incur new inference charges.
+
+Retry responses expose `retry_of_message_id`, `attempt_number` and `is_effective`.
+Earlier attempts remain as collapsible audit records, but superseded attempts
+cannot become subsequent conversational context or remain in persisted summaries.
+The UI reads one latest page, loads older history explicitly and uses SSE for live
+progress. Recovery uses targeted active-message reads and `after_ordinal` on stream
+failure, focus, visibility/online restoration or manual recovery; a healthy stream
+does not trigger a periodic full-history request.
 
 Follow-up execution records `conversation_context` in Run results and
 `context_prepared`/`contextualize` execution events. These include original and

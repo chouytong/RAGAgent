@@ -6,6 +6,7 @@ from typing import Protocol, cast
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+from ragagent.conversations.presentation import message_presentation
 from ragagent.db.dispatch import JobDispatch
 from ragagent.db.models import Conversation, ExecutionEvent, Message, Paper, Run
 from ragagent.domain.conversation import MessageStatus
@@ -164,6 +165,10 @@ def sync_assistant_message(session: Session, run: Run) -> None:
         message.content = str(result.get("answer") or result.get("draft_report") or "")
         if not message.content:
             raise ApplicationError("conversation_answer_missing")
+        message.metadata_json = {
+            **message.metadata_json,
+            "presentation": message_presentation(result),
+        }
     elif run.status == "insufficient_evidence":
         message.content = "Insufficient verified literature evidence to answer this question."
     elif run.status == "failed":

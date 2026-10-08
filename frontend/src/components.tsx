@@ -145,15 +145,41 @@ type MarkdownNode = {
   url?: string;
   children?: MarkdownNode[];
 };
+export type CitationReference = {
+  evidence_id: string;
+  page_start: number;
+  page_end?: number;
+};
 export function Citations({
   text,
   evidence,
+  references = [],
+  loadEvidence,
 }: {
   text: string;
   evidence: Evidence[];
+  references?: CitationReference[];
+  loadEvidence?: () => Promise<Evidence[]>;
 }) {
   const [selected, setSelected] = useState<Evidence | null>(null);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState<Evidence[]>([]);
+  const sources = evidence.length ? evidence : loaded;
+  async function openEvidence(id: string) {
+    setError("");
+    try {
+      let next = sources;
+      if (!next.some((item) => item.evidence_id === id) && loadEvidence) {
+        next = await loadEvidence();
+        setLoaded(next);
+      }
+      const source = next.find((item) => item.evidence_id === id);
+      if (!source) throw new Error("evidence_not_found");
+      setSelected(source);
+    } catch (error) {
+      setError(String(error));
+    }
+  }
   function remarkEvidence() {
     return (tree: unknown) => {
       function walk(node: MarkdownNode) {
@@ -169,13 +195,20 @@ export function Citations({
           }
           return child.value.split(/(\[E:[0-9a-f-]{36}\])/g).map((part) => {
             const id = part.match(/^\[E:([0-9a-f-]{36})\]$/)?.[1];
-            const source = evidence.find((item) => item.evidence_id === id);
-            return source
+            const source =
+              sources.find((item) => item.evidence_id === id) ??
+              references.find((item) => item.evidence_id === id);
+            return source || (id && loadEvidence)
               ? {
                   type: "link",
                   url: `#evidence-${id}`,
                   children: [
-                    { type: "text", value: `文献 · p.${source.page_start}` },
+                    {
+                      type: "text",
+                      value: source
+                        ? `文献 · p.${source.page_start}`
+                        : "文献引用",
+                    },
                   ],
                 }
               : { type: "text", value: part };
@@ -208,13 +241,13 @@ export function Citations({
           remarkPlugins={[remarkGfm, remarkEvidence]}
           components={{
             a: ({ href, children }) => {
-              const source = href?.startsWith("#evidence-")
-                ? evidence.find((item) => item.evidence_id === href.slice(10))
+              const id = href?.startsWith("#evidence-")
+                ? href.slice(10)
                 : undefined;
-              return source ? (
+              return id ? (
                 <button
                   className="citation"
-                  onClick={() => setSelected(source)}
+                  onClick={() => void openEvidence(id)}
                 >
                   {children}
                 </button>
@@ -230,9 +263,16 @@ export function Citations({
           {text}
         </Markdown>
       </div>
-      <details>
-        <summary>证据 ({evidence.length})</summary>
-        {evidence.map((item) => (
+      <details
+        onToggle={(event) => {
+          if (event.currentTarget.open && !sources.length && loadEvidence)
+            void loadEvidence()
+              .then(setLoaded)
+              .catch((error) => setError(String(error)));
+        }}
+      >
+        <summary>证据 ({sources.length || references.length})</summary>
+        {sources.map((item) => (
           <button
             className="evidence"
             key={item.evidence_id}
