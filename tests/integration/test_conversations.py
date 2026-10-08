@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from httpx import Headers
 from redis import Redis
 from rq.job import Job
 from sqlalchemy import delete, event, func, select
@@ -175,7 +176,9 @@ def test_invalid_message_cursor_combinations_are_rejected(
 
 
 @pytest.fixture
-def conversation_client(empty_db: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def conversation_client(
+    empty_db: Session, monkeypatch: pytest.MonkeyPatch, auth_headers: Headers
+) -> Iterator[TestClient]:
     empty_db.execute(delete(Conversation))
     empty_db.commit()
 
@@ -185,7 +188,7 @@ def conversation_client(empty_db: Session, monkeypatch: pytest.MonkeyPatch) -> I
     monkeypatch.setattr("ragagent.api.dispatcher.reconcile", lambda: None)
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_queue] = RecordingQueue
-    with TestClient(app) as client:
+    with TestClient(app, headers=auth_headers) as client:
         yield client
     app.dependency_overrides.clear()
 

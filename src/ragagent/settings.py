@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     conversation_summary_tokens: int = Field(default=1024, ge=128, le=16384)
     conversation_memory_tokens: int = Field(default=1024, ge=128, le=16384)
     conversation_memory_top_k: int = Field(default=8, ge=1, le=100)
+    local_auth_token_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     max_upload_bytes: int = Field(default=30 * 1024 * 1024, ge=1)
 
     @model_validator(mode="after")

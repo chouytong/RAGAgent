@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from typing import Any, TypeVar
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Headers
 from pydantic import BaseModel
 
 from ragagent.api import app as api
@@ -37,7 +37,9 @@ class RecordingSession:
 
 
 @pytest.fixture
-async def accounting_client() -> AsyncIterator[tuple[AsyncClient, RecordingSession]]:
+async def accounting_client(
+    auth_headers: Headers,
+) -> AsyncIterator[tuple[AsyncClient, RecordingSession]]:
     session = RecordingSession()
 
     async def db_override() -> AsyncIterator[RecordingSession]:
@@ -48,7 +50,7 @@ async def accounting_client() -> AsyncIterator[tuple[AsyncClient, RecordingSessi
     api.app.dependency_overrides[get_db] = db_override
     try:
         async with AsyncClient(
-            transport=ASGITransport(api.app), base_url="http://testserver"
+            transport=ASGITransport(api.app), base_url="http://testserver", headers=auth_headers
         ) as client:
             yield client, session
     finally:

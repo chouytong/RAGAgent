@@ -5,6 +5,7 @@ This checks the explicit missing-key path, never substitutes mock inference.
 
 import argparse
 import json
+import os
 import time
 import urllib.request
 from typing import Any
@@ -17,11 +18,18 @@ def request(
     req = urllib.request.Request(
         base + path,
         data=json.dumps(data).encode() if data is not None else None,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", **auth_headers()},
         method=method,
     )
     with urllib.request.urlopen(req, timeout=10) as response:
         return response.status, json.load(response)
+
+
+def auth_headers() -> dict[str, str]:
+    token = os.environ.get("LOCAL_AUTH_TOKEN")
+    if not token:
+        raise RuntimeError("smoke_runtime_auth_token_required")
+    return {"Authorization": "Bearer " + token}
 
 
 def smoke(base: str) -> None:
@@ -57,7 +65,8 @@ def smoke(base: str) -> None:
     if run["status"] != "failed" or run["error_code"] != "provider_key_missing":
         raise RuntimeError("worker_failure_path_not_verified")
     with urllib.request.urlopen(
-        base + "/api/runs/" + run["id"] + "/events", timeout=10
+        urllib.request.Request(base + "/api/runs/" + run["id"] + "/events", headers=auth_headers()),
+        timeout=10,
     ) as response:
         stream = response.read().decode()
         if response.status != 200 or "text/event-stream" not in response.headers["Content-Type"]:
@@ -105,7 +114,10 @@ def conversation_smoke(base: str) -> None:
         ):
             raise RuntimeError("conversation_terminal_message_missing")
         with urllib.request.urlopen(
-            base + "/api/runs/" + run["id"] + "/events", timeout=10
+            urllib.request.Request(
+                base + "/api/runs/" + run["id"] + "/events", headers=auth_headers()
+            ),
+            timeout=10,
         ) as response:
             if response.read().decode().count("event: done") != 1:
                 raise RuntimeError("conversation_sse_terminal_missing")

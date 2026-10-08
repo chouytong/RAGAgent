@@ -860,3 +860,22 @@ One original comparison test failed because a random UUID contained the string
 full rerun passed. Scripted benchmark-contract tests are explicitly not real model
 metrics. Changed evaluation/provider benchmark helpers, CLI, fixture/probe tests,
 README editions, schema/status/usage docs and this report/log.
+
+
+## Engineering Phase 6 — Local authentication and privacy (2026-10-08 Asia/Shanghai)
+
+Changed: api/auth/app/schemas/papers, centralized privacy guards, provider config,
+evaluation contracts/CLIs, native keyring/bridge, AuthPanel/transport, bilingual
+README/deployment/env/CI, explicit authorized test clients and new regressions.
+OS-native credentials; nonsecret verifier pairing; fail closed; all private API,
+SSE/download routes authenticated; ephemeral Web HttpOnly sessions; no raw bearer
+in frontend persistent storage/config. Four actual LiteLLM adapters with scripted
+failure checked through real PG Run, terminal SSE and logs. Existing assertions
+retained when test clients gained headers.
+
+Actual checks: Ruff format/lint, mypy 70 sources; real PG/Redis **591 passed**
+(3 upstream warnings); npm ci/lint/type/build, **8 transport + 29 Playwright**;
+Rust fmt/check/test/clippy locked, **9 passed, 0 ignored**; Linux native release
+build PASS (1m48s); Compose config PASS. Local Docker build/full health/ready
+NOT EXECUTED (VFS/32 GB quota); remote phase-specific CI pending. Windows system
+credential test is Windows-only and NOT EXECUTED locally; no actual model inference.

@@ -8,26 +8,30 @@ Tauri 桌面入口。它保留了现有的基于证据的知识库和 Supervisor
 不依赖 langgraph-supervisor，不声称未经验证的基准测试成绩。
 
 会话与桌面升级已发布到
-[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations)，
+[`fix/engineering-hardening`](https://github.com/chouytong/RAGAgent/tree/fix/engineering-hardening)，
 建立在现有 `phase-6-evaluation-deployment` RAG/Research 基线上。
 在 PR 完成审查和合并之前，请使用这个审查分支。
 
 ```bash
-git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
+git clone --branch fix/engineering-hardening https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
 # First checkout only; preserve an existing runtime .env.
 cp .env.example .env
+# 先安装并启动 Desktop，打开“连接授权”。
+npm --prefix frontend ci
+npm --prefix frontend run desktop:dev
+# 将非秘密配对哈希填入 .env 的 LOCAL_AUTH_TOKEN_HASH。
+# 在另一个终端启动 Compose，再回到 Desktop 检查授权。
 docker compose up --build
 ```
 
 打开 [Web 备用入口](http://localhost:8080) 和 [API 文档](http://localhost:8000/docs)。
-如需独立应用窗口，先用 Compose 启动本地后端，再执行
-`npm --prefix frontend ci` 和 `npm --prefix frontend run desktop:dev`。
+首次使用先在 Desktop 完成本机配对，再启动 Compose；Web 开发授权见部署文档。
 桌面壳只连接 `http://127.0.0.1:8000`，不会打包或启动 Python、PostgreSQL、Redis。
 Rust 和各平台的 WebView 前置依赖列在
 [部署文档](docs/deployment.md#desktop-ui-with-local-backend) 中。
 需要 Docker Compose v2 和 Git；建议至少 8 GB 内存、20 GB 可用磁盘空间。
-系统可以在未配置 API key 时启动；推理需要配置聊天服务商或本地模型。
+后端需要先配置本机授权；模型 API key 可为空启动；推理需要配置聊天服务商或本地模型。
 本地解析、嵌入和重排模型的权重会在首次使用时下载。
 `/api/health` 报告进程是否存活；`/api/ready` 检查数据库、Redis 和队列 worker，
 不代表模型或服务商已经具备推理条件。
@@ -330,3 +334,5 @@ Graph 检查点自动续跑、公共/多租户安全与 ANN 调优仍需要进�
 与仍未验证的真实 PDF、模型、服务商和基准测试验证。
 
 多语言模型采用仍未验证：[真实模型矩阵](docs/benchmarks/multilingual.md) 将现有模型、候选模型与翻译变体的指标标为 **Not measured**，需提供经审查的人工金标与已核验许可/版本的权重才能实测。CI 的脚本化 provider 不证明检索质量，默认配置保持不变。
+
+本机授权与 Web 开发临时凭据见 [部署说明](docs/deployment.md#local-owner-authentication)。原生凭据保存在系统凭据库，JS 只读取配对哈希；受保护的 API、SSE 与文献读取均需授权。

@@ -41,7 +41,7 @@ jobs:
           version: '0.12.19'
           python-version: '3.11'
       - name: Install Linux desktop dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev xvfb xauth dbus-x11
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev libdbus-1-dev xvfb xauth dbus-x11
       - run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
       - uses: actions/cache@v4
         with:
@@ -57,6 +57,9 @@ jobs:
       - run: npm run desktop:test
       - run: cd src-tauri && cargo clippy --locked -- -D warnings
       - run: npm run desktop:build
+      - name: Configure ephemeral backend authentication
+        working-directory: .
+        run: python scripts/ci_auth.py
       - name: Start the actual local backend
         working-directory: .
         run: |

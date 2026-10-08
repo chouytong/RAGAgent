@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from ragagent.db.models import Base, Chunk, Paper, Section
+from ragagent.domain.privacy import SensitiveInput, reject_credentials
 from ragagent.evaluation.artifacts import canonical_hash
 from ragagent.evaluation.metrics import average
 from ragagent.evaluation.retrieval import evaluate_retrieval
@@ -77,7 +78,7 @@ class MatrixEntry(BaseModel):
     translate_zh_en: bool = False
 
 
-class MultilingualBenchmark(BaseModel):
+class MultilingualBenchmark(SensitiveInput):
     dataset_id: str = Field(min_length=1)
     annotation_version: str = Field(min_length=1)
     cases: list[BilingualCase] = Field(min_length=3, max_length=1000)
@@ -143,6 +144,7 @@ def not_measured(reason: str) -> dict[str, Any]:
 async def run_matrix(
     spec: MultilingualBenchmark, database_url: str, directory: Path
 ) -> dict[str, Any]:
+    reject_credentials(spec.model_dump(mode="json"))
     report: dict[str, Any] = {
         "dataset_hash": canonical_hash(spec.model_dump(mode="json")),
         "annotation_warning": "User-supplied human gold/translation, not independently verified.",

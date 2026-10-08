@@ -15,6 +15,10 @@ git clone --branch fix/engineering-hardening https://github.com/chouytong/RAGAge
 cd RAGAgent
 # First checkout only; preserve an existing runtime .env.
 cp .env.example .env
+# First start Desktop and copy its pairing hash into LOCAL_AUTH_TOKEN_HASH.
+npm --prefix frontend ci
+npm --prefix frontend run desktop:dev
+# In another terminal, after pairing:
 docker compose up --build
 ```
 
@@ -47,7 +51,7 @@ The API rejects foreign/invalid Host headers. Browser write requests carrying
 Origin must match the request's scheme, local hostname and port. Command-line
 requests without Origin remain supported. Bundled nginx and Vite preserve Host
 so same-origin requests through their proxy pass this check; nginx rejects foreign
-hosts. This is local browser protection, not authentication for shared deployment.
+hosts. Local owner authentication is also required; see below. Public multi-user deployment requires a separate threat model and access control.
 
 Local commands read provider model variables and keys from the process
 environment first, then `.env`; an explicitly empty process variable overrides
@@ -422,3 +426,44 @@ For upgrades with pending jobs in the old `research` queue, stop new writes,
 keep the new workers and temporarily run `python -m ragagent.worker --queue legacy`
 with the same DB/Redis/settings. It consumes only already queued legacy jobs.
 Remove it after the legacy queue drains. Do not purge Redis or recreate the DB.
+
+
+## Local owner authentication
+
+Desktop generates a random local credential on first launch and stores it in
+Windows Credential Manager, macOS Keychain or Linux Secret Service (keyring
+3.6.3, MIT OR Apache-2.0; native platform features explicitly enabled). Linux
+requires an unlocked Secret Service and a session DBus. Storage failure shows
+an error and fails closed; there is no plaintext fallback. Restart Desktop after
+restoring the system credential store.
+
+1. Open Desktop **连接授权 / Connection authorization** before starting Compose.
+2. Copy the displayed **hash**, not a bearer, into `.env` as `LOCAL_AUTH_TOKEN_HASH`.
+3. Start/recreate API and workers, then click **连接并检查授权**. Use
+   `docker compose up -d --build` for a new install; environment changes require
+   recreating API/workers (`docker compose up -d --force-recreate api worker-interactive worker-ingestion worker-evaluation`).
+
+Only `/api/health`, `/api/ready`, `/api/auth/status` are public. All other `/api/`
+requests, including SSE and PDF/artifacts, require a bearer or Web session.
+Missing verifier keeps readiness at 503; missing/invalid auth returns 401.
+Health is process liveness and does not imply auth or model readiness. Desktop
+Rust owns bearer headers; IPC/JS never receives the bearer. The verifier hash is
+not usable as a bearer. Keep original Host/Origin and loopback protections.
+
+For **Web development only**, inject an additional randomly generated
+`LOCAL_AUTH_TOKEN` into the API process environment. Never put it in `.env`,
+config, a URL, localStorage, image, log or command-line arguments. For Compose,
+use a temporary untracked overlay containing only `environment: [LOCAL_AUTH_TOKEN]`
+for the `api` service and supply its value through the parent process environment.
+Enter that credential once in Web **连接授权**. The browser receives an HttpOnly,
+SameSite=Strict, 8-hour session cookie scoped to `/api`; the input clears after
+submission. Backend retains only hashed sessions, at most 128. Restart invalidates
+sessions; removing/rotating a credential invalidates its sessions. This additional
+Web credential does not remove the Desktop verifier. Log out with authenticated
+`DELETE /api/auth/session`; protect the operating-system account and its clipboard.
+
+Privacy: histories, memory, summaries, source PDF, Run traces and evaluation
+artifacts are local persisted data. Selected context is sent to configured remote
+providers. Credential pattern rejection is a defense at persisted user-input
+boundaries, not a universal secret detector or a PDF content sanitizer. Back up
+and restrict access to the database, config and local cache directories.

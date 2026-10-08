@@ -1,12 +1,12 @@
 """Conversation lifecycle contracts. Conversation context never defines Evidence."""
 
-import re
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ragagent.domain.privacy import safe_text
 from ragagent.domain.research import MetadataFilter
 
 ConversationMode = Literal["rag", "research"]
@@ -16,24 +16,9 @@ MessageStatus = Literal[
 ]
 MemoryKind = Literal["goal", "constraint", "term", "preference", "task"]
 
-# Reject recognizable credentials at persistence boundaries without consulting
-# runtime secrets. Ordinary scientific words such as "token" are not rejected.
-_CREDENTIAL = re.compile(
-    r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----"
-    r"|\bsk-[A-Za-z0-9_-]{20,}"
-    r"|\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"
-    r"|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"
-    r"|\beyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}"
-    r"|\b(?:[A-Z][A-Z0-9_]*_(?:API_KEY|SECRET|TOKEN|PASSWORD)|api_key|access_token|secret_key)"
-    r"\s*[:=]\s*[\"']?[A-Za-z0-9_./+-]{12,}"
-    r"|https?://[^\s/:@]+:[^\s/@]+@"
-)
-
 
 def safe_context_text(value: str) -> str:
-    if _CREDENTIAL.search(value):
-        raise ValueError("credential_content_not_allowed")
-    return value.strip()
+    return safe_text(value)
 
 
 class ConversationFilters(MetadataFilter):

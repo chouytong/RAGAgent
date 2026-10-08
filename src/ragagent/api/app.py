@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from rq import Queue, Worker
 from sqlalchemy import text
 
-from ragagent.api import conversations, evaluations, papers, providers, runs
+from ragagent.api import auth, conversations, evaluations, papers, providers, runs
 from ragagent.api.dependencies import get_search
 from ragagent.api.dispatcher import dispatcher_lifespan
 from ragagent.api.papers import DB
@@ -23,6 +23,7 @@ from ragagent.observability import configure_logging
 from ragagent.queues import queue_name
 
 app = FastAPI(title="Scientific RAGAgent", version="0.1.0", lifespan=dispatcher_lifespan)
+app.include_router(auth.router)
 app.include_router(papers.router)
 app.include_router(runs.router)
 app.include_router(providers.router)
@@ -41,10 +42,22 @@ async def trace(request: Request, call_next: Any) -> Any:
     start = time.perf_counter()
     try:
         error = local_request_error(request)
-        response = (
-            JSONResponse(status_code=403, content={"error_code": error, "request_id": request_id})
-            if error
-            else await call_next(request)
+        authentication_error = None if error else auth.auth_error(request)
+        if error:
+            response = JSONResponse(
+                status_code=403, content={"error_code": error, "request_id": request_id}
+            )
+        elif authentication_error:
+            response = JSONResponse(
+                status_code=401,
+                content={"error_code": authentication_error, "request_id": request_id},
+                headers={"WWW-Authenticate": "Bearer", "Cache-Control": "no-store"},
+            )
+        else:
+            response = await call_next(request)
+    except ApplicationError as exc:
+        response = JSONResponse(
+            status_code=503, content={"error_code": exc.code, "request_id": request_id}
         )
     except Exception:
         logger.error(
@@ -54,6 +67,8 @@ async def trace(request: Request, call_next: Any) -> Any:
             status_code=500, content={"error_code": "internal_error", "request_id": request_id}
         )
     response.headers["X-Request-ID"] = request_id
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "private, no-store"
     logger.info(
         "http_request",
         extra={"request_id": request_id, "latency_ms": (time.perf_counter() - start) * 1000},
@@ -88,6 +103,8 @@ def health() -> dict[str, str]:
 
 @app.get("/api/ready")
 def ready(db: DB) -> dict[str, str]:
+    if auth.expected_verifier() is None:
+        raise ApplicationError("local_auth_not_initialized")
     try:
         db.execute(text("SELECT 1"))
         connection = RQQueue().connection()

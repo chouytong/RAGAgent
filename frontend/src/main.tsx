@@ -4,7 +4,8 @@ import { Knowledge } from "./Knowledge";
 import { Tasks } from "./Tasks";
 import { Settings } from "./Settings";
 import { Evaluation } from "./Evaluation";
-import { request, isDesktop } from "./transport";
+import { request, isDesktop, AUTH_REQUIRED } from "./transport";
+import { AuthPanel } from "./AuthPanel";
 import "./style.css";
 
 const pages = [
@@ -61,7 +62,7 @@ function BackendStatus() {
   const text = {
     checking: "正在检查本机后端…",
     offline: "本机后端不可用，请先启动 FastAPI、数据库与任务服务。",
-    live: "后端在线，数据库或任务服务尚未就绪。",
+    live: "后端在线，授权、数据库或任务服务尚未就绪。",
     ready: "本机后端与任务服务就绪 · 模型配置与推理需另行验证",
   }[state];
   return (
@@ -75,6 +76,12 @@ function BackendStatus() {
 }
 function App() {
   const [page, setPage] = useState<Page>(pageFromHash);
+  const [needsAuth, setNeedsAuth] = useState(false);
+  useEffect(() => {
+    const requireAuth = () => setNeedsAuth(true);
+    window.addEventListener(AUTH_REQUIRED, requireAuth);
+    return () => window.removeEventListener(AUTH_REQUIRED, requireAuth);
+  }, []);
   useEffect(() => {
     const update = () => setPage(pageFromHash());
     window.addEventListener("hashchange", update);
@@ -90,6 +97,7 @@ function App() {
           </p>
         </div>
         <nav aria-label="应用导航">
+          <button onClick={() => setNeedsAuth(true)}>连接授权</button>
           {pages.map((item) => (
             <button
               key={item}
@@ -110,7 +118,9 @@ function App() {
           page === "RAG" || page === "Research" ? "chat-page" : undefined
         }
       >
-        {page === "Knowledge Base" ? (
+        {needsAuth ? (
+          <AuthPanel onConnected={() => setNeedsAuth(false)} />
+        ) : page === "Knowledge Base" ? (
           <Knowledge />
         ) : page === "Settings" ? (
           <Settings />

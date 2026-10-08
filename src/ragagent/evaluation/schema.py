@@ -2,10 +2,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from ragagent.domain.privacy import SensitiveInput, reject_credentials
 from ragagent.domain.research import MetadataFilter
 
 
-class EvaluationCase(BaseModel):
+class EvaluationCase(SensitiveInput):
     id: str
     query: str = Field(min_length=1)
     question_type: Literal["fact", "comparison", "synthesis", "filter"]
@@ -20,7 +21,7 @@ class EvaluationCase(BaseModel):
     annotated_at: str | None = None
 
 
-class EvaluationDataset(BaseModel):
+class EvaluationDataset(SensitiveInput):
     dataset_id: str
     label_source: Literal["human", "synthetic", "unannotated"]
     description: str
@@ -37,6 +38,7 @@ class EvaluationDataset(BaseModel):
         return self
 
     def runnable(self, *, allow_refusal: bool = False) -> None:
+        reject_credentials(self.model_dump(mode="json"))
         if self.label_source == "unannotated" or any(
             not c.relevant_chunk_ids and not (allow_refusal and c.expected_refusal)
             for c in self.cases
@@ -58,7 +60,7 @@ class EvaluationDataset(BaseModel):
         return "User-supplied human annotations; not independently verified by this software."
 
 
-class EvaluationRequest(BaseModel):
+class EvaluationRequest(SensitiveInput):
     dataset: EvaluationDataset
     resume_run_id: str | None = Field(
         default=None,

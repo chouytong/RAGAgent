@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from ragagent.evaluation.multilingual import MultilingualBenchmark, run_matrix
 
 
@@ -15,7 +17,10 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--database-url-env", default="TEST_DATABASE_URL")
     args = parser.parse_args()
-    spec = MultilingualBenchmark.model_validate_json(args.manifest.read_text())
+    try:
+        spec = MultilingualBenchmark.model_validate_json(args.manifest.read_text())
+    except (ValidationError, ValueError, OSError):
+        parser.error("invalid_or_unsafe_benchmark_manifest")
     database = os.environ.get(args.database_url_env)
     if not database:
         parser.error("isolated_database_environment_required")

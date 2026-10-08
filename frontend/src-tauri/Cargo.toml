@@ -21,6 +21,8 @@ futures-util = "0.3"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4", "serde"] }
 open = "5"
+keyring = { version = "=3.6.3", default-features = false, features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust"] }
+sha2 = "=0.10.9"
 
 [profile.release]
 codegen-units = 1

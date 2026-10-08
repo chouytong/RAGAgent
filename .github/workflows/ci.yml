@@ -61,6 +61,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
+      - name: Configure ephemeral local authentication
+        run: python scripts/ci_auth.py --compose-env .env
       - run: docker compose config --quiet
       - run: docker compose up -d --build --wait --wait-timeout 300
       - run: curl --fail http://127.0.0.1:8000/api/health && curl --fail http://127.0.0.1:8080/ >/dev/null

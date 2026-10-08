@@ -1,19 +1,26 @@
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Headers
 from redis import Redis
 from rq import Queue, Worker
 from sqlalchemy.orm import Session
 
+from ragagent import worker
 from ragagent.api import runs
 from ragagent.api.app import app
 from ragagent.api.dependencies import get_db
 from ragagent.api.queue import RQQueue, get_queue
 from ragagent.db.dispatch import JobDispatch
 from ragagent.db.models import ExecutionEvent, Run
+from ragagent.errors import ApplicationError
+from ragagent.providers.chat import LiteLLMProvider
+from ragagent.providers.config import AgentModel
 from ragagent.settings import get_settings
 
 
@@ -25,9 +32,61 @@ class RecordingQueue:
         self.ids.append(run_id)
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize("backend", ["openai", "anthropic", "deepseek", "ollama_chat"])
+async def test_provider_credentials_never_escape_run_sse_or_logs(
+    client: TestClient,
+    empty_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    backend: str,
+) -> None:
+    import litellm
+
+    secret = "sk-" + "SYNTHETIC" * 4
+
+    async def fail(**kwargs: Any) -> Any:
+        raise RuntimeError(secret + " PRIVATE_PAPER_CONTENT")
+
+    @contextmanager
+    def scope() -> Iterator[Session]:
+        yield empty_db
+
+    monkeypatch.setenv("PRIVACY_TEST_API_KEY", secret)
+    monkeypatch.setattr(litellm, "acompletion", fail)
+    monkeypatch.setattr(worker, "session_factory", lambda: scope)
+    monkeypatch.setattr(runs, "session_factory", lambda: scope)
+    monkeypatch.setattr(
+        worker,
+        "make_agents",
+        lambda settings: {
+            role: LiteLLMProvider(
+                AgentModel(
+                    provider=backend, model="synthetic-test", api_key_env="PRIVACY_TEST_API_KEY"
+                )
+            )
+            for role in ("supervisor", "retriever", "analyst", "reviewer")
+        },
+    )
+    monkeypatch.setattr(worker, "make_embedder", lambda settings: SimpleNamespace(dimension=384))
+    monkeypatch.setattr(worker, "make_reranker", lambda settings: SimpleNamespace())
+    submitted = client.post("/api/rag/query", json={"query": "synthetic privacy failure"})
+    assert submitted.status_code == 202
+    run_id = submitted.json()["id"]
+    with pytest.raises(ApplicationError, match="provider_request_or_schema_failed"):
+        await worker.execute_async(run_id)
+    response = client.get("/api/runs/" + run_id)
+    assert response.json()["status"] == "failed"
+    assert response.json()["error_code"] == "provider_request_or_schema_failed"
+    stream = client.get("/api/runs/" + run_id + "/events")
+    assert stream.status_code == 200 and "event: done" in stream.text
+    serialized = response.text + stream.text + caplog.text
+    assert secret not in serialized and "PRIVATE_PAPER_CONTENT" not in serialized
+
+
 @pytest.fixture
 def client(
-    empty_db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    empty_db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, auth_headers: Headers
 ) -> Iterator[TestClient]:
     def db_override() -> Iterator[Session]:
         yield empty_db
@@ -37,7 +96,7 @@ def client(
     monkeypatch.setattr("ragagent.api.dispatcher.reconcile", lambda: None)
     app.dependency_overrides[get_db] = db_override
     app.dependency_overrides[get_queue] = lambda: RecordingQueue()
-    with TestClient(app) as test_client:
+    with TestClient(app, headers=auth_headers) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 

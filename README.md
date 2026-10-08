@@ -8,26 +8,32 @@ evidence-grounded knowledge base and Supervisor workflows. MIT licensed; paper a
 independent. No langgraph-supervisor dependency. No fabricated benchmark claims.
 
 The conversation/desktop upgrade is published on
-[`feature/desktop-conversations`](https://github.com/chouytong/RAGAgent/tree/feature/desktop-conversations),
+[`fix/engineering-hardening`](https://github.com/chouytong/RAGAgent/tree/fix/engineering-hardening),
 stacked on the existing `phase-6-evaluation-deployment` RAG/Research baseline.
 Use this review branch until the PRs are reviewed and merged.
 
 ```bash
-git clone --branch feature/desktop-conversations https://github.com/chouytong/RAGAgent.git
+git clone --branch fix/engineering-hardening https://github.com/chouytong/RAGAgent.git
 cd RAGAgent
 # First checkout only; preserve an existing runtime .env.
 cp .env.example .env
+# Install/start Desktop first and open Connection authorization.
+npm --prefix frontend ci
+npm --prefix frontend run desktop:dev
+# Copy its nonsecret pairing hash into LOCAL_AUTH_TOKEN_HASH in .env.
+# Then start Compose in another terminal and reconnect Desktop.
 docker compose up --build
 ```
 
-Open the [Web fallback](http://localhost:8080) and [API docs](http://localhost:8000/docs).
-For an independent application window, start the local backend with Compose and
-run `npm --prefix frontend ci` followed by `npm --prefix frontend run desktop:dev`.
+Open the [Web fallback](http://localhost:8080) using the optional development authorization
+described in [local pairing](docs/deployment.md#local-owner-authentication).
+[API docs](http://localhost:8000/docs) require a bearer for protected requests.
+For an independent window, pair Desktop first as above, then start Compose.
 The desktop shell connects only to `http://127.0.0.1:8000`; it does not bundle or
 start Python, PostgreSQL or Redis. Rust and platform WebView prerequisites are
 listed in [deployment](docs/deployment.md#desktop-ui-with-local-backend).
 Requires Docker Compose v2, Git, recommended 8 GB RAM and 20 GB free disk.
-The system starts without API keys; inference requires configured chat providers
+The backend requires local authorization configuration; model API keys are optional for startup; inference requires configured chat providers
 or local models. Local parsing/embedding/reranker weights download on first use.
 `/api/health` reports process liveness; `/api/ready` checks DB, Redis and a queue
 worker, without asserting model/provider inference readiness.

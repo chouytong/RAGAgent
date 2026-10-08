@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod auth;
 mod bridge;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use bridge::{ApiRequest, ApiResponse, Pending, StreamEvent, API_BASE};
@@ -14,6 +15,12 @@ struct Backend {
     client: reqwest::Client,
     pending: Arc<Pending>,
     document_lock: tokio::sync::Mutex<()>,
+    credentials: auth::CredentialStatus,
+}
+
+#[tauri::command]
+fn local_auth_status(state: State<'_, Backend>) -> auth::CredentialStatus {
+    state.credentials.clone()
 }
 
 #[tauri::command]
@@ -154,7 +161,7 @@ fn prune_documents(directory: &std::path::Path, incoming: u64) -> Result<(), Str
 }
 
 fn main() {
-    let client = bridge::client().expect("local bridge initialization failed");
+    let (client, credentials) = auth::initialize().expect("local bridge initialization failed");
     if std::env::args().any(|arg| arg == "--check-backend") {
         let result = tauri::async_runtime::block_on(async {
             for path in ["/api/health", "/api/ready"] {
@@ -200,8 +207,8 @@ fn main() {
         }
     }
     let smoke = std::env::args().any(|arg| arg == "--smoke-test");
-    tauri::Builder::default().manage(Backend{client,pending:Arc::new(Pending::default()),document_lock:tokio::sync::Mutex::new(())})
-        .invoke_handler(tauri::generate_handler![api_request,cancel_request,run_events,open_resource])
+    tauri::Builder::default().manage(Backend{client,credentials,pending:Arc::new(Pending::default()),document_lock:tokio::sync::Mutex::new(())})
+        .invoke_handler(tauri::generate_handler![api_request,cancel_request,run_events,open_resource,local_auth_status])
         .setup(move|app|{
             let window=WebviewWindowBuilder::new(app,"main",WebviewUrl::App("index.html".into()))
                 .title("Scientific RAGAgent").inner_size(1320.,900.).min_inner_size(800.,560.)

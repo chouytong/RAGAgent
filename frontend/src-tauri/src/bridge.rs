@@ -93,7 +93,19 @@ impl Pending {
 }
 
 pub fn client() -> Result<Client, String> {
+    client_with_token(None)
+}
+
+pub fn client_with_token(token: Option<&str>) -> Result<Client, String> {
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(token) = token {
+        let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|_| "local_auth_credential_invalid")?;
+        value.set_sensitive(true);
+        headers.insert(reqwest::header::AUTHORIZATION, value);
+    }
     Client::builder()
+        .default_headers(headers)
         .no_proxy()
         .redirect(Policy::none())
         .connect_timeout(Duration::from_secs(5))
@@ -159,6 +171,7 @@ pub fn validate_request(path: &str, method: &str) -> Result<(), String> {
     let parts: Vec<&str> = route.trim_start_matches('/').split('/').collect();
     let allowed = match parts.as_slice() {
         ["api", "health" | "ready" | "queues"] => method == "GET",
+        ["api", "auth", "status"] => method == "GET",
         ["api", "search"] | ["api", "rag", "query"] | ["api", "research"] => method == "POST",
         ["api", "providers"] => matches!(method, "GET" | "PUT"),
         ["api", "providers", "test"] => method == "POST",

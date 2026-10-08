@@ -248,7 +248,10 @@ def main() -> None:
         "observations": [],
     }
     # No lifespan manager: benchmark GET routes only, no dispatcher/worker setup.
-    client = TestClient(app)
+    token = os.environ.get("LOCAL_AUTH_TOKEN")
+    if not token:
+        raise RuntimeError("benchmark_runtime_auth_token_required")
+    client = TestClient(app, headers={"Authorization": "Bearer " + token})
     try:
         for mode in ("rag", "research"):
             for count in (10, 50, 100):
