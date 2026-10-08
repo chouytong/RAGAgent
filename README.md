@@ -361,3 +361,5 @@ viewers may require manual navigation. In Settings, **本机诊断与版本** se
 authorization, database, Redis, workload queues and build provenance from
 model loading/inference, which remains untested until actual tasks run.
 See [engineering evidence and unverified acceptance](ENGINEERING_REVIEW.md).
+
+Validated implementation `f803d824`: backend/frontend/Compose and Linux/Windows Desktop CI passed. Actual unsigned MSI/NSIS artifacts and independently checked SHA-256 are linked in [the engineering report](ENGINEERING_REVIEW.md#final-implementation-ci-and-inspected-windows-artifacts). Real multilingual quality and Windows 11 human acceptance remain unverified.

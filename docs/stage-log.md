@@ -927,3 +927,21 @@ Windows CI OS Credential Manager test passed; installer build pending at this re
 Remote af1d2cad CI backend/Compose passed; one frontend test failed in async New Chat
 because new draft could be cleared. This phase fixes production behavior and adds
 deterministic slow-response regression; original assertions/timeouts retained.
+
+
+### Final remote implementation evidence (2026-10-08 Asia/Shanghai)
+
+Head f803d824432108cfd4bc4c4771b6764b96010cda / tree
+8246aad106e5d648b258f81a78c378935a829e5b: CI 37747840466 backend/frontend/Compose
+all success, including nonroot config writes and lossless application volume
+owner migration followed by real ready/smoke. Desktop 37747840471 Linux window/
+loopback smoke and Windows MSI/NSIS build/upload all success. Windows 10 Rust tests
+passed (0 ignored), including real OS Credential Manager round trip.
+
+Downloaded artifact 11536936513 and independently recalculated ZIP and both
+MSI/NSIS file sizes/SHA-256; all match generated manifest/GitHub digest. Raw evidence
+in docs/validation/windows-artifacts-f803d824.json. Actual PR checkout merge commit
+a1737fcfeeb05a2b81c80c7d6f3ed91403cbb5bf has identical source tree to head, verified
+using Git; provenance records actual checkout. This is CI build evidence only;
+Windows 11 human install/chat/restart/uninstall and real-model quality remain
+NOT EXECUTED/Not measured. Evidence-only documentation follow-up changes no code.

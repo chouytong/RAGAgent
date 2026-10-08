@@ -2,7 +2,7 @@
 
 日期：2026-10-08（Asia/Shanghai）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
 
-Phase 1–8 的工程实现已完成并逐阶段检查；**Phase 5 真实模型指标未测量，Windows installer 与最终 head CI 状态须按下方实际记录核验**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
+Phase 1–8 的工程实现已完成并逐阶段检查；**Phase 5 真实模型指标未测量；实现提交的 Compose、Linux Desktop 与 Windows MSI/NSIS CI 已成功，Win11 人工验收未执行**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
 
 ## A. Initial Findings
 
@@ -143,9 +143,9 @@ Phase 6：`api/auth.py` 要求 bearer SHA-256 verifier 或受限 HttpOnly Web se
 
 ## I. Windows
 
-Phase 7 实现 `.github/workflows/desktop.yml:windows-desktop`：Windows 原生 Rust locked checks、Credential Manager 实际读写/删除测试、MSI 与 NSIS 构建，上传实际制品与 source/date/version/SHA-256 manifest。Windows CI 结果须单独核验，当前本地 Linux 不能推断 installer success。`src-tauri/build.rs` 将 provenance 编译进 native IPC；`build_info.py` / `build_metadata.py` 打包 backend 来源，缺 Git 显式 unknown，不再读缺失 `.git/HEAD` 崩溃；evaluation 保留实际 source content hash。Python/Web/Desktop version 对齐 0.2.0。
+Phase 7 实现 `.github/workflows/desktop.yml:windows-desktop`：Windows 原生 Rust locked checks、Credential Manager 实际读写/删除测试、MSI 与 NSIS 构建，上传实际制品与 source/date/version/SHA-256 manifest。Windows CI 已实际成功（run 37747840471），MSI/NSIS 原始制品已下载并逐文件核对长度/SHA-256；见最终记录。`src-tauri/build.rs` 将 provenance 编译进 native IPC；`build_info.py` / `build_metadata.py` 打包 backend 来源，缺 Git 显式 unknown，不再读缺失 `.git/HEAD` 崩溃；evaluation 保留实际 source content hash。Python/Web/Desktop version 对齐 0.2.0。
 
-`docker/backend.Dockerfile` 以非 root 10001 运行，Compose 移除 .git mount；writable config 改用持久卷。旧 root-owned data/models/config 的显式 owner migration/import 已写部署文档，不删论文、DB 或映射。**Windows 11 install/launch/connect/chat/restart/uninstall：NOT EXECUTED。Signing：未验证、未签名状态待真实制品确定。**
+`docker/backend.Dockerfile` 以非 root 10001 运行，Compose 移除 .git mount；writable config 改用持久卷。旧 root-owned data/models/config 的显式 owner migration/import 已写部署文档，不删论文、DB 或映射。**Windows 11 install/launch/connect/chat/restart/uninstall：NOT EXECUTED。Signing：实际制品为 unsigned Windows build；没有代码签名配置或“无 SmartScreen 警告”声称。**
 
 产品仍是 **Desktop Client + Local Backend**：Tauri/React UI；独立运行 FastAPI、PostgreSQL/pgvector、Redis、RQ worker。不会为了打包把全部 backend 塞进 Tauri。Phase 8 显示“已通过自动证据校验”，tooltip 明确不保证科学事实；原文 code-point offsets 经范围检查，UI 重新比对并切原文，无法验证回退完整 quote。Web PDF 使用 #page；Desktop 系统 viewer 可能忽略，界面明确目标页/手动跳转。Settings 手动 diagnostics 分开显示 DB/Redis/各队列与未测模型状态，绝不据配置推断推理就绪。
 
@@ -304,3 +304,24 @@ Phase 6 [CI 37737420508](https://github.com/chouytong/RAGAgent/actions/runs/3773
 ### 未验证项
 
 批准的 human gold 与许可模型权重、真实推理与中文质量、provider 实际可达性/费用、真实模型下 semantic verifier 抗注入/科研正确率、Windows 11 安装/卸载/重启会话、系统 PDF viewer 跳页、签名/macOS 制品、真实大规模 ANN/浏览器性能和资源饱和。上述项没有足够数据或平台条件，不生成结果。现有代码/合成检查未发现可信 API key 硬编码泄漏或 silent mock production fallback 证据。
+
+
+### Final implementation CI and inspected Windows artifacts
+
+实现 head **`f803d824432108cfd4bc4c4771b6764b96010cda`**，source tree
+`8246aad106e5d648b258f81a78c378935a829e5b`：
+
+- [CI 37747840466](https://github.com/chouytong/RAGAgent/actions/runs/37747840466)：backend、frontend、Compose 全部 success。Compose 实际 build/up/health/ready/smoke、nonroot provider config PUT、旧 root-owned application volumes 的 lossless owner migration 与二次启动/smoke 均 success。
+- [Desktop 37747840471](https://github.com/chouytong/RAGAgent/actions/runs/37747840471)：Linux native check/build、真实 loopback backend readiness、Xvfb product window DOM smoke success；Windows native check/test/clippy、MSI/NSIS build、manifest/hash 与 upload success。Windows **10 Rust tests passed / 0 ignored**，包括实际 Credential Manager 写入/读取/删除；不是 Windows 11 人工聊天验收。
+- PR 的实际 CI checkout 为 `a1737fcfeeb05a2b81c80c7d6f3ed91403cbb5bf`（GitHub generated merge commit），已用 Git 验证其 tree 与上面的实现 head **完全相同**。Manifest source_commit 记录实际 checkout，而非手填 head SHA。
+- Artifact **11536936513**，archive **5,477,729 bytes**，SHA-256 `d4732bb669eaa9289cd0fba23fd2a6984f76150cb4dac038ae1c720682aa226d`；下载后重新计算与 GitHub artifact digest 一致。
+
+| 实际制品（0.2.0 / Windows x64 / unsigned） | Bytes | 下载后重新计算 SHA-256 |
+| --- | ---: | --- |
+| MSI `Scientific RAGAgent_0.2.0_x64_en-US.msi` | 3,366,912 | `c79a0df222aa6f8e8dcbc9d3dc093b2fad00ff3ea9229c927cc8a3c58f29edc7` |
+| NSIS `Scientific RAGAgent_0.2.0_x64-setup.exe` | 2,333,441 | `3fec01ff4a09351e981cd22090d403803758ef5873d41bea1c19f4d13b771b67` |
+
+原始 metadata、normalized Windows paths 与逐文件校验结果保存在
+[`docs/validation/windows-artifacts-f803d824.json`](docs/validation/windows-artifacts-f803d824.json)。没有执行这些 Windows 二进制，也没有以构建成功推断 install/launch/chat/restart/uninstall、签名或科学质量通过。
+
+以上证据属于明确的 implementation commit；随后的证据整理提交仅更新文档和这份校验记录，不把它当成新的模型/性能实验。

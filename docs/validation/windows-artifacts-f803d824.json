@@ -1,0 +1,48 @@
+{
+  "label": "REAL WINDOWS CI ARTIFACT INSPECTION / NOT A MODEL BENCHMARK",
+  "head_sha": "f803d824432108cfd4bc4c4771b6764b96010cda",
+  "pr_checkout_commit": "a1737fcfeeb05a2b81c80c7d6f3ed91403cbb5bf",
+  "source_tree_sha": "8246aad106e5d648b258f81a78c378935a829e5b",
+  "workflow_run": 37747840471,
+  "artifact_id": 11536936513,
+  "archive_bytes": 5477729,
+  "archive_sha256": "d4732bb669eaa9289cd0fba23fd2a6984f76150cb4dac038ae1c720682aa226d",
+  "manifest": {
+    "source_commit": "a1737fcfeeb05a2b81c80c7d6f3ed91403cbb5bf",
+    "dirty": null,
+    "built_at_utc": "2026-10-08T08:09:27Z",
+    "version": "0.2.0",
+    "platform": "windows-x86_64",
+    "signing": "unsigned",
+    "artifacts": [
+      {
+        "path": "msi\\Scientific RAGAgent_0.2.0_x64_en-US.msi",
+        "bytes": 3366912,
+        "sha256": "c79a0df222aa6f8e8dcbc9d3dc093b2fad00ff3ea9229c927cc8a3c58f29edc7"
+      },
+      {
+        "path": "nsis\\Scientific RAGAgent_0.2.0_x64-setup.exe",
+        "bytes": 2333441,
+        "sha256": "3fec01ff4a09351e981cd22090d403803758ef5873d41bea1c19f4d13b771b67"
+      }
+    ]
+  },
+  "inspected_artifacts": [
+    {
+      "path": "msi\\Scientific RAGAgent_0.2.0_x64_en-US.msi",
+      "bytes": 3366912,
+      "sha256": "c79a0df222aa6f8e8dcbc9d3dc093b2fad00ff3ea9229c927cc8a3c58f29edc7",
+      "normalized_path": "msi/Scientific RAGAgent_0.2.0_x64_en-US.msi",
+      "verified": true
+    },
+    {
+      "path": "nsis\\Scientific RAGAgent_0.2.0_x64-setup.exe",
+      "bytes": 2333441,
+      "sha256": "3fec01ff4a09351e981cd22090d403803758ef5873d41bea1c19f4d13b771b67",
+      "normalized_path": "nsis/Scientific RAGAgent_0.2.0_x64-setup.exe",
+      "verified": true
+    }
+  ],
+  "windows11_manual_installation": "NOT EXECUTED",
+  "signing": "unsigned"
+}

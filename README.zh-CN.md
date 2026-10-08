@@ -344,3 +344,5 @@ Windows MSI/NSIS 制品由 [Desktop 工作流](.github/workflows/desktop.yml) �
 PDF 面板明确目标页，系统查看器可能需要手动跳页。Settings 的“本机诊断与版本”
 分别显示授权、数据库、Redis、各任务队列与构建来源；模型加载和推理需真实任务验证。
 实际测试证据与尚未验证的验收项见 [工程整改报告](ENGINEERING_REVIEW.md)。
+
+实现提交 `f803d824` 的 backend/frontend/Compose 与 Linux/Windows Desktop CI 均已通过。真实未签名 MSI/NSIS 制品及下载后独立核对的 SHA-256 见[工程报告](ENGINEERING_REVIEW.md#final-implementation-ci-and-inspected-windows-artifacts)。多语言真实质量与 Windows 11 人工验收仍未验证。
