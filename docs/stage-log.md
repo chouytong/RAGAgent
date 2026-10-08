@@ -773,3 +773,10 @@ backend image/containers. Windows and real-model scientific acceptance NOT
 EXECUTED. Raw before benchmarks and the repeatable measurement script are kept
 in docs/benchmarks and scripts; after measurements will follow this implementation
 commit so the manifest identifies the code actually tested.
+
+Phase 2 measurement follow-up: actual before/after fixture hashes matched for all
+18 original shapes. RAG full 100 rows: 5,108,941 → 93,241 bytes; SELECT 102 → 2;
+heavy Run-result SELECT 100 → 0; median 93.346 → 7.449 ms. The new latest-50,
+older-page, one-row/empty incremental shapes are separately labeled. Before 270
+and after 630 raw samples are committed; these measure PG/ASGI API performance
+on explicit synthetic fixtures, not browser rendering or model retrieval quality.

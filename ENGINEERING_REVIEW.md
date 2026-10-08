@@ -39,7 +39,7 @@
 | 比较正确性 | paper_count≥2 才进入分析 | 可用原文进入分析；reviewer 显式实体支持和 citation pair 检查；paper_count 仅诊断 | 已实现，完整工程检查继续 |
 | Retry | metadata 记录重试，无 effective lineage | 新增 retry_of_message_id、attempt_number、is_effective；summary 排除过期 attempt | 已实现，迁移/回归见 C/J |
 | 删除 | 数据库 cascade，未撤销外部排队任务 | 删除 commit 后 best-effort queue cancel；late write guard 保留 | 已实现，race 回归见 J |
-| 消息与前端刷新 | 完整 Run 随所有消息重复序列化；活跃任务每 4 秒全历史刷新 | 标量 RunSummary 投影，最近 50/双向 ordinal cursor；SSE 为主，active placeholder 单条对账；Run/Evidence lazy load | Phase 2 已实现，After 实测待写入 |
+| 消息与前端刷新 | 完整 Run 随所有消息重复序列化；活跃任务每 4 秒全历史刷新 | 标量 RunSummary 投影，最近 50/双向 ordinal cursor；SSE 为主，active placeholder 单条对账；Run/Evidence lazy load | Phase 2 已实现、Before/After 实测完成 |
 | 队列、Memory、认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 3–8 PENDING** |
 
 保留独立 RAG/Research Graph、PostgreSQL/pgvector、Redis/RQ、Knowledge Base、PDF/arXiv ingestion、SSE、Evaluation、Multi-provider、Tauri 和 Web fallback。没有从零重写或用大型基础设施替换现有组件。
@@ -58,20 +58,37 @@ Comparison 新增 23 条单元与 6 条真实 PG 集成回归，覆盖同一 chu
 
 ## D. Performance
 
-**Before 已实测，After 尚未测量。** 原始数据：`/workspace/RAGAgent-validation/messages-before.json`，未修改。标识：`messages-api-perf-v1`，fixture 脚本 SHA256 `854b8f87b8ff61a81994b56b64ab266e4b357ac4c7cb4cd2974ccd0bebfef1d7`；各组存储结果 hash 在原始 observations 中。
+**Before / After 均已实测。** 原始记录分别为 `docs/benchmarks/messages-before.json`、
+`messages-after.json`；可复跑脚本 `scripts/benchmark_messages.py`。Before code
+`ba04246`，After 实测本地 implementation commit `affa5d9`（GitHub 发布的 tree 会验证一致）。
+18 组原请求的 stored-result hash 全部一致，数据/查询数量未改变；新增 cursor 另标。
 
-这是 **SYNTHETIC API PERFORMANCE FIXTURE / NOT SCIENTIFIC RETRIEVAL QUALITY**：FastAPI TestClient ASGI + 真实 PostgreSQL TCP，Python 3.12.14、PG 17.10、pgvector 0.8.2；每组 3 次预热、15 次计时，固定每 Run 8 条 evidence/40 条 trace。测量数据库查询、序列化、ASGI，不包含浏览器渲染、网络 HTTP/TLS 或模型延迟。以下为请求全部历史；单位 bytes/ms，未推断速度提升。
+这是 **SYNTHETIC API PERFORMANCE FIXTURE / NOT SCIENTIFIC RETRIEVAL QUALITY**。
+真实 PostgreSQL 17.10 / pgvector 0.8.2 + FastAPI TestClient，每组 3 warmups + 15 samples；
+每 Run 8 evidence/40 trace。包含 PG TCP、DB 查询、序列化、ASGI，不包含实际 HTTP/TLS、
+浏览器渲染或模型推理。Before 270 samples，After 原请求 270 + cursor 360 = 630 samples。
+环境依赖的延迟不能推为生产 throughput 或科研检索质量。
 
-| 模式 | 消息数 | Before response bytes | Before median ms | Before p95 ms | SELECT / Run-result SELECT | After |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| RAG | 10 | 510886 | 14.492 | 27.866 | 12 / 10 | Not measured |
-| RAG | 50 | 2554466 | 46.554 | 111.653 | 52 / 50 | Not measured |
-| RAG | 100 | 5108941 | 93.346 | 190.527 | 102 / 100 | Not measured |
-| Research | 10 | 510936 | 13.781 | 17.836 | 12 / 10 | Not measured |
-| Research | 50 | 2554716 | 43.544 | 104.982 | 52 / 50 | Not measured |
-| Research | 100 | 5109441 | 108.276 | 190.798 | 102 / 100 | Not measured |
+| 模式 | 总消息数 | Before / After bytes | median ms | p95 ms | SELECT | Run-result SELECT |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| rag | 10 | 510886 / 9316 | 14.492 / 5.216 | 27.866 / 6.940 | 12 / 2 | 10 / 0 |
+| rag | 50 | 2554466 / 46616 | 46.554 / 5.919 | 111.653 / 6.505 | 52 / 2 | 50 / 0 |
+| rag | 100 | 5108941 / 93241 | 93.346 / 7.449 | 190.527 / 9.576 | 102 / 2 | 100 / 0 |
+| research | 10 | 510936 / 9366 | 13.781 / 4.702 | 17.836 / 5.623 | 12 / 2 | 10 / 0 |
+| research | 50 | 2554716 / 46866 | 43.544 / 6.095 | 104.982 / 7.408 | 52 / 2 | 50 / 0 |
+| research | 100 | 5109441 / 93741 | 108.276 / 7.269 | 190.798 / 8.535 | 102 / 2 | 100 / 0 |
 
-100 条对话仅取最近 20 条，基线 RAG/Research 仍分别返回 1021791/1021891 bytes，median 21.921/28.735 ms，22 个 SELECT（20 个读取 Run result）。新消息 cursor、lazy detail 和历史分页的对照测量属于 Phase 2，**PENDING**。100-message 实际 UI、context/summary latency 和 Evaluation+交互并发等待测试均 **Not measured**。
+RAG 100 条完整历史从 5,108,941 降为 93,241 bytes（98.17%），SELECT 从 102 降为 2，
+重型 Run-result SELECT 从 100 降为 0。median 93.346 → 7.449 ms。该对照仍返回完整 100 条。
+新默认最近 50 条是不同请求：RAG 100 条对话返回 46,626 bytes、median 6.974 ms；
+单条增量 1,280 bytes、4.172 ms；空增量 2 bytes、4.224 ms。不能拿 50 条与旧 100 条假比。
+
+实际 UI 的 120-message fixture 验证首次仅 50 条、没有批量读取 full Runs；点击引用只读取
+对应的 1 个 Run，再次点击复用缓存。201 条 user 历史仍能显式分页完整恢复；正常 SSE
+跨越旧 4 秒轮询周期不增加历史请求，丢失 done 时能核对原 ordinal 并恢复完成状态。
+这些是浏览器回归，不是已量化的浏览器渲染性能或真实模型质量。
+
+实际 context/summary latency、Evaluation+interactive 并发等待将在后续阶段测量。
 
 ## E. Retrieval
 
@@ -143,7 +160,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 - **Phase 3–8 未完成**；单队列、Memory 选择、Local API auth、Windows 工程化等仍需实施并重新测试。
 - semantic verifier 是 model-based 检查，可能判断错误；source-grounded 名字与 exact substring 不等于科研结论正确，最终结论需人工复核。
 - summary 为有损 extractive；改写输入预算不是总费用上限。取消/删除不能撤回已经发出的远端请求或保证零费用。
-- Before 性能数据仅合成 API fixture，After、实际 UI 长对话、队列隔离和真实多语言检索质量尚未测量；不生成推断指标。
+- Before/After 性能数据仅合成 API fixture；浏览器渲染、队列隔离和真实多语言检索质量尚未测量；不生成推断指标。
 - 真正的 Windows 11、macOS packaging/signing、系统 PDF page navigation、实际模型 provider readiness 和模型权重许可/下载可达性需要对应平台、模型与数据验证。
 - 增量数据库迁移不应删除旧 conversation/message/Run/Memory/papers/evaluation；降级恢复策略以实际 Alembic 与备份检查为准。
 
@@ -172,4 +189,4 @@ Rust fmt/locked check/test/clippy **8 passed、0 ignored**；Linux Tauri release
 Compose config、frontend 镜像 build PASS；backend 镜像重建与完整 health/ready
 **NOT EXECUTED**：已确认 VFS/32 GB 配额，只剩不足 2 GB，上一阶段创建后端容器已触发
 ENOSPC。这不是部署通过。Windows/真实模型科学验收仍 NOT EXECUTED。
-After benchmark 将对该已提交代码在独立数据库实跑，完成前不声称改善幅度。
+After benchmark 已在该 implementation commit 的独立数据库实跑，原始数据与范围见 D。

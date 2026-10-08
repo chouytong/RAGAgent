@@ -101,8 +101,21 @@ count and raw latency samples. A bounded initial page can legitimately return
 fewer rows than full history; it is a different request, not a before/after
 substitute for the all-messages comparison above.
 
-After measurements are **Not measured** until the Phase 2 backend is complete,
-committed and executed against its separate upgraded database. Multilingual
-embedding/reranker quality is also **Not measured**: the review environment has
-no cached weights and its configured proxy rejects Hugging Face access with
-CONNECT 403. Synthetic API data must not be used to claim retrieval gains.
+After measurements are now in [messages-after.json](messages-after.json), from
+local implementation commit `affa5d9`, with all 18 original fixture hashes matching.
+The original request shapes contain 270 measured samples; the four cursor shapes
+add 360 samples, separately labeled. For RAG's full 100-message request, bytes fell
+from 5,108,941 to 93,241, SELECTs from 102 to 2, and `runs.result` SELECTs from 100
+to zero. Median API latency was 93.346 / 7.449 ms before / after. This is the same
+100 rows, not the new bounded initial page. The raw file includes p95 and every
+sample; latency remains environment-dependent.
+
+Use `--cursors` to reproduce initial-latest-50, older-page, one-message incremental
+and empty incremental shapes. For a 100-message RAG fixture, these returned
+46,626 / 46,616 / 1,280 / 2 bytes respectively. `returned_ordinals` in every sample
+makes the different request scope inspectable. The benchmark leaves only its six
+explicit fixture conversations in the isolated database for inspection.
+
+Multilingual embedding/reranker quality remains **Not measured**: the review
+environment has no cached weights and its configured proxy rejects Hugging Face
+access with CONNECT 403. Synthetic API data cannot support retrieval gains.
