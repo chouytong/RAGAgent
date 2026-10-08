@@ -1,8 +1,8 @@
 # Scientific RAGAgent 工程审查与整改报告
 
-日期：2026-10-07（UTC）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
+日期：2026-10-08（Asia/Shanghai）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
 
-本报告是阶段记录。Phase 1–7 的实现和已执行检查如下；**Phase 8 为 PENDING；Phase 5 真实模型指标未测量**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
+Phase 1–8 的工程实现已完成并逐阶段检查；**Phase 5 真实模型指标未测量，Windows installer 与最终 head CI 状态须按下方实际记录核验**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
 
 ## A. Initial Findings
 
@@ -34,7 +34,7 @@
 
 ## B. Architecture Changes
 
-| 方面 | Before：审查基线 | After：当前 Phase 1 | 后续状态 |
+| 方面 | Before：审查基线 | After：当前实现 | 验证范围 |
 | --- | --- | --- | --- |
 | 比较正确性 | paper_count≥2 才进入分析 | 可用原文进入分析；reviewer 显式实体支持和 citation pair 检查；paper_count 仅诊断 | 已实现，完整工程检查继续 |
 | Retry | metadata 记录重试，无 effective lineage | 新增 retry_of_message_id、attempt_number、is_effective；summary 排除过期 attempt | 已实现，迁移/回归见 C/J |
@@ -42,7 +42,7 @@
 | 消息与前端刷新 | 完整 Run 随所有消息重复序列化；活跃任务每 4 秒全历史刷新 | 标量 RunSummary 投影，最近 50/双向 ordinal cursor；SSE 为主，active placeholder 单条对账；Run/Evidence lazy load | Phase 2 已实现、Before/After 实测完成 |
 | 队列 | 固定 research queue，一个 worker | 固定路由到 interactive/ingestion/evaluation；三个独立 Compose worker，单角色 CLI | Phase 3 已实现，真实 RQ/PG occupancy probe 见 G |
 | Context/Memory | 有历史就改写；全部 Memory 入 payload；仅 extractive summary | 双语 gate、Top-K text/全部硬约束、分项近似 token 预算、持久化 typed intent state | Phase 4 已实现，F 节实测 |
-| 认证、Windows、span UX | 维持基线行为 | 当前未将计划作为实现记录 | **Phase 5–8 PENDING** |
+| 认证、Windows、span UX | Host/Origin 保护，无 local client auth；无 Windows job 或 claim span | 系统凭据库 + verifier 配对/HttpOnly Web session；Windows MSI/NSIS CI + build metadata；原文 offsets 窄片段/fallback、PDF 页码提示、手动 diagnostics | Phase 6–8 已实现；平台/模型实际状态见 H/I/J/K |
 
 保留独立 RAG/Research Graph、PostgreSQL/pgvector、Redis/RQ、Knowledge Base、PDF/arXiv ingestion、SSE、Evaluation、Multi-provider、Tauri 和 Web fallback。没有从零重写或用大型基础设施替换现有组件。
 
@@ -90,7 +90,7 @@ RAG 100 条完整历史从 5,108,941 降为 93,241 bytes（98.17%），SELECT �
 跨越旧 4 秒轮询周期不增加历史请求，丢失 done 时能核对原 ordinal 并恢复完成状态。
 这些是浏览器回归，不是已量化的浏览器渲染性能或真实模型质量。
 
-实际 context/summary latency、Evaluation+interactive 并发等待将在后续阶段测量。
+Context CPU/输入大小的 Before/After 见 F；Evaluation 占用时单次交互任务延迟实测见 G。均非真实模型效果或生产负载统计。
 
 ## E. Retrieval
 
@@ -147,7 +147,7 @@ Phase 7 实现 `.github/workflows/desktop.yml:windows-desktop`：Windows 原生 
 
 `docker/backend.Dockerfile` 以非 root 10001 运行，Compose 移除 .git mount；writable config 改用持久卷。旧 root-owned data/models/config 的显式 owner migration/import 已写部署文档，不删论文、DB 或映射。**Windows 11 install/launch/connect/chat/restart/uninstall：NOT EXECUTED。Signing：未验证、未签名状态待真实制品确定。**
 
-产品仍是 **Desktop Client + Local Backend**：Tauri/React UI；独立运行 FastAPI、PostgreSQL/pgvector、Redis、RQ worker。不会为了打包把全部 backend 塞进 Tauri。Phase 8 的 PDF 页码定位、证据文案和 diagnostics 亦 PENDING；系统默认 PDF viewer 是否尊重页码尚未验证。
+产品仍是 **Desktop Client + Local Backend**：Tauri/React UI；独立运行 FastAPI、PostgreSQL/pgvector、Redis、RQ worker。不会为了打包把全部 backend 塞进 Tauri。Phase 8 显示“已通过自动证据校验”，tooltip 明确不保证科学事实；原文 code-point offsets 经范围检查，UI 重新比对并切原文，无法验证回退完整 quote。Web PDF 使用 #page；Desktop 系统 viewer 可能忽略，界面明确目标页/手动跳转。Settings 手动 diagnostics 分开显示 DB/Redis/各队列与未测模型状态，绝不据配置推断推理就绪。
 
 ## J. Tests
 
@@ -178,7 +178,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## K. Known Limitations
 
-- **Phase 8 未完成**；Phase 5 harness 已实现，真实多语言模型指标因资源/人工金标缺失仍未测量。
+- Phase 5 的真实多语言模型指标仍未测量；缺批准的人工 gold/权重，环境模型站点 CONNECT 403，无 torch/sentence_transformers。不得把 null 改成假零分或据候选名字换默认模型。
 - semantic verifier 是 model-based 检查，可能判断错误；source-grounded 名字与 exact substring 不等于科研结论正确，最终结论需人工复核。
 - summary 为有损 extractive；改写输入预算不是总费用上限。取消/删除不能撤回已经发出的远端请求或保证零费用。
 - Before/After 性能数据仅合成 API fixture；浏览器渲染性能和真实多语言检索质量尚未测量；队列隔离仅有单次合成 probe；不生成推断指标。
@@ -187,7 +187,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## L. Future Work
 
-Phase 8 与 Phase 5 受阻实测属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
+Phase 5 受阻实测、真实模型 A–H 场景与 Windows 11 人工验收属于**本次请求尚未验证的部分**，列在 K/J；不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
 
 
 ### Phase 2 checks (2026-10-08 Asia/Shanghai)
@@ -268,3 +268,39 @@ Phase 5 远端当前 head `f57a4754737a4e32af2eec57a4633d1cf7055b20` 的 [CI 377
 Ruff format/lint、mypy 71 sources PASS；uv lock + sync --locked（190 packages，版本升为 0.2.0，未换依赖）PASS；真实 PG/Redis **593 passed**（3 upstream warnings）。npm ci/lint/check/build、8 transport + 29 Playwright PASS；Rust fmt/check/test/clippy locked **9 passed，0 ignored**。Compose config PASS；本地 backend image/full health/ready NOT EXECUTED（VFS 配额）。Linux native release build PASS（1m33s）。Windows job 已纳入待发布源码；实际构建与制品 status 不能预先声称 success。
 
 Phase 6 [CI 37737420508](https://github.com/chouytong/RAGAgent/actions/runs/37737420508) head `0a82f3a750ab15ee009c29618dbbb84b6bf8fe46` success，包含鉴权配置后的 Compose build/up/health/ready/真实 queued missing-key failure/SSE smoke。不覆盖 Phase 7 nonroot/config-volume 改动。
+
+
+### Phase 8 changes and checks (2026-10-08 Asia/Shanghai)
+
+| 变化 | 当前证据 | 行为与最小边界 |
+| --- | --- | --- |
+| Claim supporting span | `domain/research.py:ClaimEvidencePair`、`retrieval/evidence.py:verify_claims:142`；`tests/unit/test_supporting_spans.py` | 仅 optional 原始 chunk code-point offsets；边界/非空不合格置 null、保留原 quote。复用当前 reviewer，无额外检索/模型调用；语义支持仍受模型判断误差影响。 |
+| 原文与页码 UX | `frontend/src/components.tsx:Citations:322/377`、`api.ts:SupportingPair` | UI 按 Unicode code points 切原文，先验证整个 quote 范围；完整来源、表头/辅助片段保留；PDF 目标页显示/系统 viewer 手动跳转。 |
+| 安全 diagnostics | `api/diagnostics.py:diagnostics:20`、`frontend/src/Diagnostics.tsx:25` | 已鉴权的实际 DB/Redis/队列状态和来源；configuration/connectivity/model loading/index compatibility 分开，后者 not_tested；不加载模型/发付费请求。 |
+| 错误体验 | `errors.py:error_payload`、`api/app.py:LocalAPI/trace/http_error`、`frontend/src/errors.ts:errorMessage` | 安全代码/消息/手动 retryable/null details/request ID；不回显不可信错误文本/无效 JSON。Swagger Bearer 与实际 public 路由一致。native SSE 401 立即停止重连并请求配对。 |
+| New Chat 草稿竞态 | `frontend/src/Tasks.tsx:newChat:150`、`tests/chat.spec.ts` | 确认远端首次超时：异步创建完成后清空了刚输入的 query。清空移到 I/O 前；延迟 POST 回归保留新草稿。未延长原 timeout 或删除断言。 |
+| 升级与配置写入 | `scripts/smoke.py:smoke`、`.github/workflows/ci.yml:compose` | 真实 API 原映射 PUT 保存；CI 模拟旧 root-owned config/data/model volumes，并执行 documented owner migration，保留 marker/DB/映射后重新 health/ready/smoke。当前 head 的远端结果单独核验。 |
+
+已执行：Ruff format/lint/mypy 72 sources；真实 PG/Redis **604 passed**（3 upstream warnings）；npm ci/lint/typecheck/build，**10 transport + 32 Playwright passed**；Rust fmt/check/test/clippy locked **9 passed、0 ignored**；Linux Tauri release build PASS（1m48s）；Compose config PASS。本地 Docker 当前镜像重建/full health/ready **NOT EXECUTED**（VFS 配额不足），以相应 remote head 的实际 CI 单独验证。真实模型质量/Windows 11 人工操作仍未验证。
+
+首次 Windows run 37745437701 在 CRLF/Prettier 失败，之后步骤 skipped。`.gitattributes` 固定 LF 后，run 37746128653 已实际通过 Windows Rust check/test/clippy 与 Credential Manager 读写/删除回归；installer build 当时 in_progress，不能写通过。该 source 的 CI 37746128555 backend/Compose success，frontend 一例 New Chat race timeout；上述修正进入 Phase 8，不将其失败掩盖或当作部署 failure。
+
+### A–K acceptance evidence (explicit limits)
+
+| 场景 | 实际自动验证 | 仍需人工/实际模型验证 |
+| --- | --- | --- |
+| A 基础 RAG 上传/引用 | 真 PG API upload/ingestion 合约，scripted graphs 引用；真实 RQ missing-key failure/smoke | 实际许可论文 + 实际 chat/embedding/reranker 回答质量，NOT EXECUTED |
+| B 追问最大样本量 | Fresh evidence/历史隔离、实体解析，两图 + 真实 PG 回归 | 实际论文/模型追问质量，NOT EXECUTED |
+| C 同论文 A/B 比较 | 单 chunk/双 chunk/多论文与不足路径，语义/pair/entity 校验；原断言保留 | 实际论文/模型比较支持率，NOT EXECUTED |
+| D Retry | lineage/有效 attempt/summary 重建、PG restart、UI retry | 实际模型先失败后成功，NOT EXECUTED |
+| E False Memory | wrong Memory/旧 answer 数字不得作 evidence 的两图与 PG 回归 | 指定 999→102 原文案例实际模型，NOT EXECUTED；不冒充 scripted fixture 数值为实际金标 |
+| F 100 messages | 42×15 API fixture samples、50/100 context samples，120/201 browser历史、SSE + lazy detail 回归 | 真实模型连续 100 轮和浏览器性能 profiling，NOT EXECUTED |
+| G Evaluation isolation | 真 RQ/PG 双进程 barrier，eval 占用时 interactive 111.697ms 单次合成任务 | 大型真实 Evaluation 的 CPU/RAM 饱和影响，NOT EXECUTED |
+| H 中文问英文论文 | 多语言 human-provenance matrix harness、方向/许可/模型 fingerprint 合约 | 三方向真实 Recall/MRR/nDCG/citation/refusal，Not measured |
+| I 执行中删除 | 真 PG late completion/cancel/FK 原子性、RQ cancel 合约、UI hard delete | 实际远端 in-flight 请求不可撤回/仍可能收费；实机长 Research 需验证 |
+| J 本机安全 | 缺/错/重复 bearer、cookie expiry/logout/rotation/origin；四 SDK transport失败的真 Run/SSE/log；Windows store实际测试 | 恶意本机进程/OS账号隔离不是本 local single-user 威胁模型；完整 Windows Tauri+后端配对操作未人工执行 |
+| K Windows 11 | Windows CI真实检查/OS store结果如 I/J 记录；Installer artifact 状态单独记入 | install/launch/connect/chat/restart/persistence/uninstall NOT EXECUTED；未签名，不声称 SmartScreen 无警告 |
+
+### 未验证项
+
+批准的 human gold 与许可模型权重、真实推理与中文质量、provider 实际可达性/费用、真实模型下 semantic verifier 抗注入/科研正确率、Windows 11 安装/卸载/重启会话、系统 PDF viewer 跳页、签名/macOS 制品、真实大规模 ANN/浏览器性能和资源饱和。上述项没有足够数据或平台条件，不生成结果。现有代码/合成检查未发现可信 API key 硬编码泄漏或 silent mock production fallback 证据。

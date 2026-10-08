@@ -84,6 +84,24 @@ async def test_provider_credentials_never_escape_run_sse_or_logs(
     assert secret not in serialized and "PRIVATE_PAPER_CONTENT" not in serialized
 
 
+@pytest.mark.integration
+def test_diagnostics_separates_real_infrastructure_from_untested_models(
+    client: TestClient,
+    redis_connection: Redis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(RQQueue, "connection", lambda self: redis_connection)
+    response = client.get("/api/diagnostics")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["database"] == result["redis"] == "available"
+    assert result["local_auth"] == "initialized"
+    assert result["build"]["version"] == "0.2.0"
+    assert set(result["queues"]) == {"interactive", "ingestion", "evaluation"}
+    assert result["inference"] == result["retrieval_configuration"]["model_loading"] == "not_tested"
+    assert "ragagent_test:ragagent_test" not in response.text
+
+
 @pytest.fixture
 def client(
     empty_db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, auth_headers: Headers

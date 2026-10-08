@@ -129,7 +129,11 @@ export function stream(path: string, callbacks: StreamCallbacks): () => void {
     else if (event.event === "done") {
       callbacks.onDone(event.data);
       closed = true;
-    } else callbacks.onError(event.data);
+    } else {
+      if (event.data === "local_auth_required")
+        window.dispatchEvent(new Event(AUTH_REQUIRED));
+      callbacks.onError(event.data);
+    }
   };
   void invoke("run_events", { id, path, after, onEvent }).catch(
     (error: unknown) => {
@@ -155,7 +159,17 @@ export async function openLocalResource(path: string): Promise<void> {
     ).test(path)
   )
     throw new Error("local_resource_not_allowed");
-  await invoke("open_resource", { path });
+  try {
+    await invoke("open_resource", { path });
+  } catch (error) {
+    if (error === "local_auth_required")
+      window.dispatchEvent(new Event(AUTH_REQUIRED));
+    throw new Error(
+      typeof error === "string" && /^[a-z][a-z0-9_]{0,100}$/.test(error)
+        ? error
+        : "local_document_unavailable",
+    );
+  }
 }
 export async function openPaperPdf(paperId: string, page = 1): Promise<void> {
   await openLocalResource(`/api/papers/${paperId}/pdf#page=${page}`);

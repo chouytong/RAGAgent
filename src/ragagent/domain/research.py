@@ -92,6 +92,9 @@ class ClaimVerdict(BaseModel):
 class ClaimEvidencePair(BaseModel):
     claim_id: str
     evidence_id: str
+    # Optional offsets in original chunk Unicode code points, never generated quotes.
+    supporting_span_start: int | None = None
+    supporting_span_end: int | None = None
 
 
 class ComparisonEntityCoverage(BaseModel):

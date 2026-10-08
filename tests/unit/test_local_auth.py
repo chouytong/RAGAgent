@@ -151,3 +151,10 @@ def test_invalid_environment_returns_safe_code(
     assert response.status_code == 503
     assert response.json()["error_code"] == "local_auth_configuration_invalid"
     assert "private value" not in response.text
+
+
+def test_openapi_describes_bearer_auth_and_actual_public_routes() -> None:
+    schema = app.openapi()
+    for path in ("/api/health", "/api/ready", "/api/auth/status"):
+        assert schema["paths"][path]["get"]["security"] == []
+    assert schema["paths"]["/api/papers"]["get"]["security"] == [{"HTTPBearer": []}]

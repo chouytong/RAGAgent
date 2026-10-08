@@ -3,14 +3,16 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer
 from rq import Queue, Worker
 from sqlalchemy import text
+from starlette.exceptions import HTTPException
 
 from ragagent import __version__
-from ragagent.api import auth, conversations, evaluations, papers, providers, runs
+from ragagent.api import auth, conversations, diagnostics, evaluations, papers, providers, runs
 from ragagent.api.dependencies import get_search
 from ragagent.api.dispatcher import dispatcher_lifespan
 from ragagent.api.papers import DB
@@ -18,13 +20,29 @@ from ragagent.api.queue import RQQueue
 from ragagent.api.schemas import QueryRequest, SearchResponse
 from ragagent.api.security import local_request_error
 from ragagent.domain.research import QueryPlan
-from ragagent.errors import ApplicationError
+from ragagent.errors import ApplicationError, error_payload
 from ragagent.evaluation.artifacts import usage_delta, usage_snapshot
 from ragagent.observability import configure_logging
 from ragagent.queues import queue_name
 
-app = FastAPI(title="Scientific RAGAgent", version=__version__, lifespan=dispatcher_lifespan)
+
+class LocalAPI(FastAPI):
+    def openapi(self) -> dict[str, Any]:
+        schema = super().openapi()
+        # FastAPI merges security lists in openapi_extra; mark truly public routes.
+        for path in ("/api/health", "/api/ready", "/api/auth/status"):
+            schema["paths"][path]["get"]["security"] = []
+        return schema
+
+
+app = LocalAPI(
+    title="Scientific RAGAgent",
+    version=__version__,
+    lifespan=dispatcher_lifespan,
+    dependencies=[Depends(HTTPBearer(auto_error=False))],
+)
 app.include_router(auth.router)
+app.include_router(diagnostics.router)
 app.include_router(papers.router)
 app.include_router(runs.router)
 app.include_router(providers.router)
@@ -45,27 +63,23 @@ async def trace(request: Request, call_next: Any) -> Any:
         error = local_request_error(request)
         authentication_error = None if error else auth.auth_error(request)
         if error:
-            response = JSONResponse(
-                status_code=403, content={"error_code": error, "request_id": request_id}
-            )
+            response = JSONResponse(status_code=403, content=error_payload(error, request_id))
         elif authentication_error:
             response = JSONResponse(
                 status_code=401,
-                content={"error_code": authentication_error, "request_id": request_id},
+                content=error_payload(authentication_error, request_id),
                 headers={"WWW-Authenticate": "Bearer", "Cache-Control": "no-store"},
             )
         else:
             response = await call_next(request)
     except ApplicationError as exc:
-        response = JSONResponse(
-            status_code=503, content={"error_code": exc.code, "request_id": request_id}
-        )
+        response = JSONResponse(status_code=503, content=error_payload(exc.code, request_id))
     except Exception:
         logger.error(
             "http_failed", extra={"request_id": request_id, "error_code": "internal_error"}
         )
         response = JSONResponse(
-            status_code=500, content={"error_code": "internal_error", "request_id": request_id}
+            status_code=500, content=error_payload("internal_error", request_id)
         )
     response.headers["X-Request-ID"] = request_id
     if request.url.path.startswith("/api/"):
@@ -81,7 +95,7 @@ async def trace(request: Request, call_next: Any) -> Any:
 async def safe_error(request: Request, exc: ApplicationError) -> JSONResponse:
     return JSONResponse(
         status_code=503,
-        content={"error_code": exc.code, "request_id": getattr(request.state, "request_id", None)},
+        content=error_payload(exc.code, getattr(request.state, "request_id", None)),
     )
 
 
@@ -90,19 +104,27 @@ async def invalid_request(request: Request, exc: RequestValidationError) -> JSON
     # Pydantic's default response echoes rejected input, which can contain credentials.
     return JSONResponse(
         status_code=422,
-        content={
-            "error_code": "invalid_request",
-            "request_id": getattr(request.state, "request_id", None),
-        },
+        content=error_payload("invalid_request", getattr(request.state, "request_id", None)),
     )
 
 
-@app.get("/api/health")
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+    code = exc.detail if isinstance(exc.detail, str) else "invalid_request"
+    payload = error_payload(code, getattr(request.state, "request_id", None))
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={**payload, "detail": payload["error_code"]},
+        headers=exc.headers,
+    )
+
+
+@app.get("/api/health", openapi_extra={"security": []})
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/api/ready")
+@app.get("/api/ready", openapi_extra={"security": []})
 def ready(db: DB) -> dict[str, str]:
     if auth.expected_verifier() is None:
         raise ApplicationError("local_auth_not_initialized")
@@ -153,7 +175,9 @@ async def search(request: QueryRequest, db: DB) -> SearchResponse | JSONResponse
         return JSONResponse(
             status_code=503 if isinstance(exc, ApplicationError) else 500,
             content={
-                "error_code": exc.code if isinstance(exc, ApplicationError) else "internal_error",
+                **error_payload(
+                    exc.code if isinstance(exc, ApplicationError) else "internal_error"
+                ),
                 "usage": {"embedding": usage_delta(before, usage_snapshot(embedder))},
                 "usage_scope": "current_request",
             },

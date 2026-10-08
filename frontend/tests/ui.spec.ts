@@ -41,7 +41,7 @@ test("typing multiword and OR filters preserves the actual request", async ({
       datasets: ["CIFAR 10", "Image Net"],
     });
   await expect(
-    page.getByRole("heading", { name: "证据校验通过" }),
+    page.getByRole("heading", { name: "已通过自动证据校验" }),
   ).toBeVisible();
 });
 
@@ -148,7 +148,7 @@ test("real EventSource reconnects with its cursor, completes and restores citati
     await page.getByRole("button", { name: "发送", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("正在重连");
     await expect(
-      page.getByRole("heading", { name: "证据校验通过" }),
+      page.getByRole("heading", { name: "已通过自动证据校验" }),
     ).toBeVisible();
     expect(resumedCursor).toBe("7");
     await expect(page.getByRole("alert")).toHaveCount(0);
@@ -164,7 +164,7 @@ test("real EventSource reconnects with its cursor, completes and restores citati
     await page.reload();
     await page.getByRole("button", { name: "RAG", exact: true }).click();
     await expect(
-      page.getByRole("heading", { name: "证据校验通过" }),
+      page.getByRole("heading", { name: "已通过自动证据校验" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "文献 · p.7" }),

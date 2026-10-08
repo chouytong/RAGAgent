@@ -259,9 +259,11 @@ Start local infrastructure and the desktop development window:
 
 ```bash
 cp .env.example .env  # only for a new checkout; preserve existing runtime settings
-docker compose up -d --build
 npm --prefix frontend ci
 npm --prefix frontend run desktop:dev
+# Copy Desktop connection hash to LOCAL_AUTH_TOKEN_HASH in .env first.
+# In another terminal, start backend:
+docker compose up -d --build
 ```
 
 `desktop:dev` runs Vite on `127.0.0.1:1420` and opens Tauri; it does not manually
@@ -525,3 +527,36 @@ mount through an overlay and grant UID 10001 write access explicitly. Indexes,
 conversations, messages, summaries, Memory and Run history are retained; Alembic
 upgrades in place. Do not run `down -v`. A missing verifier intentionally leaves
 readiness unready until pairing is complete.
+
+
+## Evidence display and diagnostics
+
+Completed answers show **已通过自动证据校验 / Passed automated evidence validation**.
+This checks citations and model-based support; it does not guarantee scientific
+truth. Optional claim supporting spans are original chunk Unicode code-point
+ranges, checked against the released quote. The UI slices the original content,
+never displays a generated replacement quote; invalid/unavailable offsets fall
+back to the complete original quote. Full source, section, pages, version/status
+and independent table/header context remain inspectable. Narrow spans use the
+existing reviewer call, without another retrieval or paid verification call.
+
+Web PDF links use `#page=N`; viewer support varies. Desktop downloads a scoped
+original PDF and opens the OS viewer, which may ignore pages. The citation panel
+shows the target page and asks for manual navigation. No claim of automatic
+Windows page navigation is made.
+
+In Settings, expand **本机诊断与版本** and click **读取诊断**. Protected
+`GET /api/diagnostics` separates auth, DB, Redis, all workload queues and build
+identity. It reports credential configuration separately from provider connectivity,
+and labels model loading/inference/index compatibility **not_tested**. It never
+loads model weights or issues a paid request. Use connectivity tests/actual jobs
+for those checks. Database connect timeout is 5 seconds; Redis socket timeout
+is 3 seconds. Infrastructure readiness alone never means model readiness.
+
+API errors provide safe `error_code`, `message`, `retryable`, `details` (null) and
+request ID; HTTPException retains safe `detail` compatibility. Frontend adds
+recovery guidance for auth/network/provider/retrieval/worker errors and retains
+safe codes. Retryable is manual guidance, not automatic UI retries or a guarantee
+of no duplicate provider charge. Invalid responses/raw exceptions/secret-bearing
+text are not echoed. OpenAPI's Bearer authorization supports protected CLI/Web
+requests; native Desktop authorization remains confined to Rust/system storage.

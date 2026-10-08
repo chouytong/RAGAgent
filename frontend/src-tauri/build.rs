@@ -1,9 +1,5 @@
 fn main() {
-    use std::{
-        env,
-        process::Command,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::{env, process::Command};
     println!("cargo:rerun-if-env-changed=RAGAGENT_SOURCE_COMMIT");
     println!("cargo:rerun-if-env-changed=RAGAGENT_BUILD_TIME");
     println!("cargo:rerun-if-changed=../../.git/HEAD");
@@ -35,14 +31,17 @@ fn main() {
                 && s.bytes()
                     .all(|c| c.is_ascii_digit() || b"TZ:+. -".contains(&c))
         })
-        .unwrap_or_else(|| {
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-                .to_string()
-        });
+        .filter(|s| s.len() >= 10)
+        .unwrap_or_else(|| "unknown".into());
+    let dirty = Command::new("git")
+        .args(["status", "--porcelain", "--untracked-files=no"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| if o.stdout.is_empty() { "false" } else { "true" })
+        .unwrap_or("unknown");
     println!("cargo:rustc-env=RAGAGENT_SOURCE_COMMIT={commit}");
     println!("cargo:rustc-env=RAGAGENT_BUILD_TIME={built}");
+    println!("cargo:rustc-env=RAGAGENT_SOURCE_DIRTY={dirty}");
     tauri_build::build()
 }

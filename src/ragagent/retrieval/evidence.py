@@ -179,6 +179,10 @@ async def verify_claims(
             "supports at least one part of the claim. Different citations may support different "
             "parts of a comparison. A supported claim does not make every attached citation "
             "valid: omit irrelevant or unsupported pairs. Return each supported pair once. "
+            "Optionally return supporting_span_start/end as Unicode code-point offsets "
+            "in the original chunk (quote starts at evidence.span_start). Select the exact "
+            "contiguous original text supporting this claim; never generate a replacement "
+            "quote. Leave both null when no reliable narrower span can be selected. "
             "Also assess whether the original question and required aspects are fully answered. "
             "When comparison_required is true, return comparison_entities for at least two "
             "distinct canonical compared entities, including every requested entity. For each "
@@ -239,10 +243,29 @@ async def verify_claims(
                 verdict = matched[0]
             verdicts.append(verdict)
             if verdict.supported and not verdict.contradiction:
-                validated_pairs.extend(
-                    ClaimEvidencePair(claim_id=c.claim_id, evidence_id=eid)
-                    for eid in c.evidence_ids
-                )
+                for eid in c.evidence_ids:
+                    selected = next(
+                        p
+                        for p in response.supported_pairs
+                        if p.claim_id == c.claim_id and p.evidence_id == eid
+                    )
+                    item = by_id[eid]
+                    start, end = selected.supporting_span_start, selected.supporting_span_end
+                    # Invalid extraction falls back to the unchanged original quote.
+                    valid_span = (
+                        start is not None
+                        and end is not None
+                        and item.span_start <= start < end <= item.span_end
+                        and bool(item.content[start:end].strip())
+                    )
+                    validated_pairs.append(
+                        ClaimEvidencePair(
+                            claim_id=c.claim_id,
+                            evidence_id=eid,
+                            supporting_span_start=start if valid_span else None,
+                            supporting_span_end=end if valid_span else None,
+                        )
+                    )
     supported = {v.claim_id for v in verdicts if v.supported and not v.contradiction}
     covered = {c.aspect for c in claims if c.claim_id in supported}
     missing = list(dict.fromkeys([a for a in aspects if a not in covered] + model_missing))

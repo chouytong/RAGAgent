@@ -4,11 +4,12 @@ import type { Message } from "../api";
 import { Citations, Json } from "../components";
 import { activeStatus } from "./useConversationMessages";
 import { useRunEvents } from "./useRunEvents";
+import { errorMessage } from "../errors";
 
 export const statusLabels: Record<string, string> = {
   queued: "排队中",
   running: "执行中",
-  completed: "证据校验通过",
+  completed: "已通过自动证据校验",
   insufficient_evidence: "证据不足",
   failed: "执行失败",
   cancelled: "已取消",
@@ -122,6 +123,7 @@ export function ResultPanel({
           evidence={result?.evidence_pool ?? result?.reranked_evidence ?? []}
           references={presentation?.citation_refs}
           loadEvidence={loadEvidence}
+          supportingPairs={result?.citation_validation?.supported_pairs}
         />
       )}
       {(state === "failed" || state === "cancelled") && (
@@ -129,7 +131,7 @@ export function ResultPanel({
           {state === "failed"
             ? "本轮未完成，没有发布未经验证的回答。"
             : "本轮已取消。"}
-          {run?.error_code && ` (${run.error_code})`}
+          {run?.error_code && ` ${errorMessage(run.error_code)}`}
         </p>
       )}
       {retryable &&

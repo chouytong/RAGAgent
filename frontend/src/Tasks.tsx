@@ -152,11 +152,12 @@ export function Tasks({ research }: { research: boolean }) {
     busyRef.current = true;
     setBusy(true);
     setError("");
+    // Clear the old draft before I/O; preserve text typed while creation waits.
+    setQuery("");
+    setFilters(emptyFilters);
+    pendingSubmission.current = null;
     try {
       await createConversation();
-      setQuery("");
-      setFilters(emptyFilters);
-      pendingSubmission.current = null;
       await refreshList();
     } catch (e) {
       setError(String(e));

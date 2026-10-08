@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Mapping, Model, api } from "./api";
+import { Diagnostics } from "./Diagnostics";
 export function Settings() {
   const [mapping, setMapping] = useState<Mapping | null>(null),
     [savedMapping, setSavedMapping] = useState<Mapping | null>(null),
@@ -60,6 +61,7 @@ export function Settings() {
   return (
     <section>
       <h2>Provider Settings</h2>
+      <Diagnostics />
       <p>
         配置 Agent → provider / model。API keys
         从服务器环境读取，此界面不接收或显示密钥。

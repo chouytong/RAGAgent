@@ -904,3 +904,26 @@ steps were skipped, not passed. Add .gitattributes enforcing LF for auto-detecte
 text without weakening/ignoring formatter checks. Linux Desktop and CI/Compose
 run 37745437745 on source 1f4f0a6bc0ba22f1f3880a9661ab4758e614e261 succeeded.
 Installer success remains unverified until the corrected Windows job runs.
+
+## Engineering Phase 8 — Evidence UX, diagnostics and final review (2026-10-08 Asia/Shanghai)
+
+Changed claim/evidence optional original code-point ranges and verified fallback;
+frontend Unicode-safe original slicing, automatic-evidence terminology and PDF
+manual target-page guidance; protected diagnostics/build metadata; safe error
+payloads/Swagger Bearer and recovery messages; native SSE 401 stops reconnecting
+and prompts pairing. Fixed confirmed New Chat race by clearing old draft before
+asynchronous creation, preserving newly typed input with delayed-response test.
+Bilingual README maintained; final ENGINEERING_REVIEW A–L/A–K evidence recorded.
+CI extends config PUT smoke and lossless old root-owned volume owner migration.
+
+Actual: Ruff format/lint/mypy 72 sources; real PG/Redis **604 passed** (3 upstream
+warnings); npm ci/lint/type/build, **10 transport + 32 Playwright**; Rust fmt/locked
+check/test/clippy **9 passed, 0 ignored**; Linux Tauri release build **PASS (1m48s)**;
+Compose config PASS. Local Docker image/full health/ready NOT EXECUTED (VFS quota);
+phase-specific remote results are separate. No real-model quality/gold made up.
+Windows 11 human installation/chat/restart/uninstall NOT EXECUTED, signing absent.
+Windows CI OS Credential Manager test passed; installer build pending at this record.
+
+Remote af1d2cad CI backend/Compose passed; one frontend test failed in async New Chat
+because new draft could be cleared. This phase fixes production behavior and adds
+deterministic slow-response regression; original assertions/timeouts retained.

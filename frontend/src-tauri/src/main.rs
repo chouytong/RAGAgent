@@ -25,7 +25,7 @@ fn local_auth_status(state: State<'_, Backend>) -> auth::CredentialStatus {
 
 #[tauri::command]
 fn desktop_build_info() -> serde_json::Value {
-    serde_json::json!({"version": env!("CARGO_PKG_VERSION"), "sourceCommit": env!("RAGAGENT_SOURCE_COMMIT"), "builtAtUtc": env!("RAGAGENT_BUILD_TIME"), "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH, "signing": "unsigned"})
+    serde_json::json!({"version": env!("CARGO_PKG_VERSION"), "sourceCommit": env!("RAGAGENT_SOURCE_COMMIT"), "sourceDirty": env!("RAGAGENT_SOURCE_DIRTY"), "builtAtUtc": env!("RAGAGENT_BUILD_TIME"), "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH, "signing": "unsigned"})
 }
 
 #[tauri::command]
@@ -74,6 +74,9 @@ async fn open_resource(
         .send()
         .await
         .map_err(|_| "local_backend_unavailable")?;
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("local_auth_required".into());
+    }
     if !response.status().is_success() {
         return Err("local_document_unavailable".into());
     }

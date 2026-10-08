@@ -11,7 +11,7 @@ import time
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ragagent.errors import ApplicationError
+from ragagent.errors import ApplicationError, error_payload
 from ragagent.settings import get_settings
 
 TOKEN_SHAPE = re.compile(r"[A-Za-z0-9_-]{43,128}\Z")
@@ -94,7 +94,7 @@ def auth_error(request: Request) -> str | None:
     return None if authenticated(request) else "local_auth_required"
 
 
-@router.get("/status")
+@router.get("/status", openapi_extra={"security": []})
 def status(request: Request) -> dict[str, bool]:
     verifier = expected_verifier()
     return {"initialized": verifier is not None, "authenticated": authenticated(request)}
@@ -104,7 +104,7 @@ def status(request: Request) -> dict[str, bool]:
 def create_session(request: Request) -> JSONResponse:
     # Middleware checks the bearer; also enforce it for direct callers.
     if not request.headers.get("authorization") or not authenticated(request):
-        return JSONResponse(status_code=401, content={"error_code": "local_auth_required"})
+        return JSONResponse(status_code=401, content=error_payload("local_auth_required"))
     verifier = authenticated_verifier(request)
     assert verifier is not None
     cookie = secrets.token_urlsafe(32)

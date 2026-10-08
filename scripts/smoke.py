@@ -46,6 +46,10 @@ def smoke(base: str) -> None:
     if code != 200 or search["evidence"]:
         raise RuntimeError("empty_index_search_failed")
     _, providers = request(base, "/api/providers")
+    # Real nonroot config-volume write; preserve the exact existing mapping.
+    _, saved = request(base, "/api/providers", {"agents": providers["agents"]}, method="PUT")
+    if saved.get("status") != "saved":
+        raise RuntimeError("provider_mapping_not_writable")
     supervisor = providers["agents"]["supervisor"]
     if supervisor["key_configured"] or supervisor["provider"] not in {
         "openai",

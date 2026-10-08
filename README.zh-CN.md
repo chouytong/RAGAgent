@@ -338,3 +338,9 @@ Graph 检查点自动续跑、公共/多租户安全与 ANN 调优仍需要进�
 本机授权与 Web 开发临时凭据见 [部署说明](docs/deployment.md#local-owner-authentication)。原生凭据保存在系统凭据库，JS 只读取配对哈希；受保护的 API、SSE 与文献读取均需授权。
 
 Windows MSI/NSIS 制品由 [Desktop 工作流](.github/workflows/desktop.yml) 构建；仅使用成功运行的制品并核对哈希。见 [Windows 安装与限制](docs/deployment.md#windows-installers-and-build-provenance)。构建未签名，Windows 11 人工验收需单独完成。
+
+回答完成状态为 **已通过自动证据校验**：引用与模型支持检查不保证科学事实正确。
+逐结论支持片段使用经过范围检查的原文字符位置；无法验证时保留完整原文。
+PDF 面板明确目标页，系统查看器可能需要手动跳页。Settings 的“本机诊断与版本”
+分别显示授权、数据库、Redis、各任务队列与构建来源；模型加载和推理需真实任务验证。
+实际测试证据与尚未验证的验收项见 [工程整改报告](ENGINEERING_REVIEW.md)。

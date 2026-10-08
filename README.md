@@ -352,3 +352,12 @@ remains unverified.
 Multilingual model adoption remains unverified: the [real-model matrix](docs/benchmarks/multilingual.md) records current/candidate/translation configurations with **Not measured** metrics until approved human gold and licensed immutable weights are supplied. CI scripted providers do not establish retrieval quality. Defaults are unchanged.
 
 Windows MSI/NSIS artifacts are built by the [Desktop workflow](.github/workflows/desktop.yml); use only successful-run artifacts and verify hashes. See [Windows installation and limitations](docs/deployment.md#windows-installers-and-build-provenance). Builds are unsigned; Windows 11 human acceptance remains separate.
+
+Completed answers are labeled **Passed automated evidence validation**; this
+checks evidence links and model-based support and does not guarantee scientific
+truth. Claim supporting spans use validated original text offsets, with the full
+original quote retained as fallback. PDF panels show the requested page; native
+viewers may require manual navigation. In Settings, **本机诊断与版本** separates
+authorization, database, Redis, workload queues and build provenance from
+model loading/inference, which remains untested until actual tasks run.
+See [engineering evidence and unverified acceptance](ENGINEERING_REVIEW.md).

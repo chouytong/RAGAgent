@@ -172,6 +172,7 @@ pub fn validate_request(path: &str, method: &str) -> Result<(), String> {
     let allowed = match parts.as_slice() {
         ["api", "health" | "ready" | "queues"] => method == "GET",
         ["api", "auth", "status"] => method == "GET",
+        ["api", "diagnostics"] => method == "GET",
         ["api", "search"] | ["api", "rag", "query"] | ["api", "research"] => method == "POST",
         ["api", "providers"] => matches!(method, "GET" | "PUT"),
         ["api", "providers", "test"] => method == "POST",
@@ -395,6 +396,9 @@ pub async fn events<F: Fn(StreamEvent) -> bool>(
                 .send()
                 .await
                 .map_err(|_| "local_backend_unavailable")?;
+            if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+                return Err("local_auth_required".into());
+            }
             if !response.status().is_success()
                 || !response
                     .headers()
@@ -428,7 +432,11 @@ pub async fn events<F: Fn(StreamEvent) -> bool>(
             Ok(true) => return Ok(()),
             Ok(false) => {}
             Err(code) => {
+                let auth_required = code == "local_auth_required";
                 if !send(StreamEvent::Error { data: code }) {
+                    return Ok(());
+                }
+                if auth_required {
                     return Ok(());
                 }
             }
