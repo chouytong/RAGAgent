@@ -119,3 +119,9 @@ explicit fixture conversations in the isolated database for inspection.
 Multilingual embedding/reranker quality remains **Not measured**: the review
 environment has no cached weights and its configured proxy rejects Hugging Face
 access with CONNECT 403. Synthetic API data cannot support retrieval gains.
+
+[Multilingual matrix](multilingual.md) documents the real-model harness, required
+human gold/licensed weights and current **Not measured** results. Null metrics
+are retained; scripted CI plumbing is not a model benchmark. Context before/after
+artifacts measure construction only; queue-isolation.json is a single occupancy
+probe with scripted scientific providers.

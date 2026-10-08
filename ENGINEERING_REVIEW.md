@@ -2,7 +2,7 @@
 
 日期：2026-10-07（UTC）。审查基线：`ba04246c82f556753c36980e76cf64360ca533ce`，冻结副本为 `/workspace/RAGAgent-review-baseline`。整改分支：`fix/engineering-hardening`。
 
-本报告是阶段记录。Phase 1–4 的实现和已执行检查如下；**Phase 5–8 均为 PENDING**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
+本报告是阶段记录。Phase 1–5 的实现和已执行检查如下；**Phase 6–8 为 PENDING；Phase 5 真实模型指标未测量**。没有以 scripted provider 测试代替真实模型效果，没有把计划中的 Windows 构建、安装或签名写成已完成。A 节行号指审查基线；C 节符号指整改分支。
 
 ## A. Initial Findings
 
@@ -98,9 +98,9 @@ RAG 100 条完整历史从 5,108,941 降为 93,241 bytes（98.17%），SELECT �
 
 | 质量评测 | Recall@5 / Recall@10 / MRR / nDCG | 状态 |
 | --- | --- | --- |
-| English query → English paper | Not measured | Phase 5 PENDING |
-| Chinese query → English paper | Not measured | Phase 5 PENDING |
-| Chinese query → Chinese paper | Not measured | Phase 5 PENDING |
+| English query → English paper | Not measured | Phase 5 harness 已实现；真实指标 Not measured |
+| Chinese query → English paper | Not measured | Phase 5 harness 已实现；真实指标 Not measured |
+| Chinese query → Chinese paper | Not measured | Phase 5 harness 已实现；真实指标 Not measured |
 | 当前模型 / multilingual 候选 / translation / reranker 对照 | Not measured | 无证据前不更改默认模型 |
 | dense / FTS / reranker 独立延迟 | Not measured | 必须由实际运行记录 |
 
@@ -174,7 +174,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## K. Known Limitations
 
-- **Phase 5–8 未完成**；真实多语言模型对比、Local API auth、Windows 工程化等仍需实施并重新测试。
+- **Phase 6–8 未完成**；Phase 5 harness 已实现，真实多语言模型指标因资源/人工金标缺失仍未测量。
 - semantic verifier 是 model-based 检查，可能判断错误；source-grounded 名字与 exact substring 不等于科研结论正确，最终结论需人工复核。
 - summary 为有损 extractive；改写输入预算不是总费用上限。取消/删除不能撤回已经发出的远端请求或保证零费用。
 - Before/After 性能数据仅合成 API fixture；浏览器渲染性能和真实多语言检索质量尚未测量；队列隔离仅有单次合成 probe；不生成推断指标。
@@ -183,7 +183,7 @@ Docker daemon 使用 VFS，约 2.06 GB 后端镜像在创建多个容器时复�
 
 ## L. Future Work
 
-Phase 5–8 属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
+Phase 6–8 与 Phase 5 受阻实测属于**本次任务剩余范围**，不能移到 Future Work 伪装完成。仅将不必在当前本地单用户版解决的工作列于此：公网/多租户 RBAC 与 TLS 部署、基于大规模实测的 ANN 调优、原始 Graph 自动 checkpoint 恢复、长期人工科学结论审查流程。需要规模、威胁模型或业务需求后再实施，避免无依据新增大型数据库/Agent。
 
 
 ### Phase 2 checks (2026-10-08 Asia/Shanghai)
@@ -236,3 +236,14 @@ Ruff format/lint、mypy 66 sources PASS，真实 PG/Redis 全量 **558 passed**�
 Rust fmt/locked check/test/clippy **8 passed、0 ignored**；Linux Tauri release build PASS（1m23s）。
 Compose config PASS，当前版本本地 image build/full health/ready NOT EXECUTED（VFS 磁盘配额）；
 Phase 2 的远端 Compose success 不冒充本版本验证。Windows/真实模型科学验收 NOT EXECUTED。
+
+
+### Phase 5 implementation and checks (2026-10-08 Asia/Shanghai)
+
+`evaluation/multilingual.py:run_matrix` 与 `scripts/benchmark_multilingual.py` 复用现有 PG/FTS/RRF/重排 evaluator；独立 scratch schema 自动删除，不替换用户 index。要求 en→en/zh→en/zh→zh 的 human provenance、gold chunk/language、source version/license 与许可文件 hash、本地 immutable artifact identity。可比较现有/候选 embedding/reranker 及有人工来源的预翻译。缺权重时 metrics=null、Not measured，不能生成假零分；失败案例计数另列，不能伪装全量成功。
+
+环境实际 proxy CONNECT Hugging Face 返回 403；torch/sentence_transformers 未安装，未提供批准的人工 gold/权重。`docs/benchmarks/multilingual-status.json` 的 5×3 矩阵全部 **Not measured**；候选权重许可与 revision 未核验，因此没有换默认模型。真实质量/翻译费用/ANN recall 均未完成。
+
+Ruff format/lint、mypy 68 sources PASS；真实 PG/Redis全量 **566 passed**（3 upstream warnings）。npm ci/lint/typecheck/build、**8 transport + 28 Playwright** PASS；Rust fmt/locked check/test/clippy **8 passed、0 ignored**；Linux Tauri release build PASS（1m29s）；Compose config PASS。本地镜像 build/full health/ready NOT EXECUTED（VFS 配额）；本版本 Windows/实际模型验收 NOT EXECUTED。
+
+首次全量 565 pass / 1 fail：原 comparison fixture 的随机 paper UUID `33ed8cdf-9eee-437d-8500-66f6fe4263c9` 含 `500`，触发 scripted evidence payload 数字隔离断言。固定该 fixture 的 paper/section/chunk ID 后全量通过；保留全部原“500 不进入证据 / fresh 20/80 / Beta winner / 两图 / filters / citation precision”断言，未删测试或降低断言。新增 benchmark harness 测试只证明契约、调用现有 evaluator 与 schema 清理，不是科学质量数据。

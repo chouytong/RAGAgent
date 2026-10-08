@@ -342,3 +342,5 @@ The baseline and ADRs were written during the engineering repair; they are not
 recovered historical specifications or prior acceptance evidence. The stage log
 separates actual checks from real PDF/model/provider/benchmark validation that
 remains unverified.
+
+Multilingual model adoption remains unverified: the [real-model matrix](docs/benchmarks/multilingual.md) records current/candidate/translation configurations with **Not measured** metrics until approved human gold and licensed immutable weights are supplied. CI scripted providers do not establish retrieval quality. Defaults are unchanged.

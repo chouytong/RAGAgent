@@ -833,3 +833,30 @@ Linux Tauri release build PASS (1m23s); Compose config PASS. Local image build a
 full health/ready NOT EXECUTED due VFS/32 GB quota. Phase 2 GitHub Compose checks
 succeeded separately; this does not establish Phase 4 runtime success. Windows
 and actual multilingual models/manual science acceptance NOT EXECUTED.
+
+## Engineering hardening — Phase 5 (2026-10-08 Asia/Shanghai)
+
+Added an offline licensed real-model matrix and JSON manifest schema requiring
+three language directions, operator-supplied human gold/translation provenance,
+consistent paper metadata and local immutable/license identities. It reuses the
+existing retrieval evaluator in a unique scratch schema and cleans it afterward;
+no production indexes/models are rewritten. Missing weights return Not measured
+and null metrics before DB/model access. Direction metrics disclose failed counts.
+
+Actual real-model measurement blocked: proxy CONNECT Hugging Face 403, optional
+torch/sentence_transformers absent, approved human gold and weight directories
+not supplied. Current/candidate/both/pretranslation 5x3 status artifact retains
+null metrics and unverified candidate licenses/revisions. Defaults unchanged.
+This does not complete real multilingual quality acceptance.
+
+Ruff format/lint/mypy 68 sources PASS; real PG/Redis **566 passed**, 3 warnings;
+frontend npm ci/lint/check/build, **8 transport / 28 Playwright** PASS;
+Rust fmt/locked check/test/clippy **8 passed / 0 ignored**; Linux native Tauri build
+PASS (1m29s); Compose config PASS. Local image build/full health/ready NOT EXECUTED
+(VFS quota); Windows/real-model acceptance NOT EXECUTED for this version.
+
+One original comparison test failed because a random UUID contained the string
+500. Fixed only fixture paper/section/chunk identities, retaining every assertion;
+full rerun passed. Scripted benchmark-contract tests are explicitly not real model
+metrics. Changed evaluation/provider benchmark helpers, CLI, fixture/probe tests,
+README editions, schema/status/usage docs and this report/log.

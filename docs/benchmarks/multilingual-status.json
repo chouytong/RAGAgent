@@ -1,0 +1,182 @@
+{
+  "status": "Not measured",
+  "date": "2026-10-08 Asia/Shanghai",
+  "network_observation": "curl through the configured proxy: CONNECT tunnel failed, response 403 for huggingface.co; no bypass attempted",
+  "torch_installed": false,
+  "sentence_transformers_installed": false,
+  "approved_human_gold_available": false,
+  "defaults_changed": false,
+  "candidate_licenses": "Not verified: model cards/weight licenses unavailable; candidates are not adopted",
+  "matrix": [
+    {
+      "name": "current",
+      "embedding": "sentence-transformers/all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "translation": "none",
+      "model_revision": null,
+      "artifact_license_verified": false,
+      "directions": {
+        "en-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-zh": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        }
+      }
+    },
+    {
+      "name": "multilingual-embedding",
+      "embedding": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "translation": "none",
+      "model_revision": null,
+      "artifact_license_verified": false,
+      "directions": {
+        "en-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-zh": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        }
+      }
+    },
+    {
+      "name": "multilingual-reranker",
+      "embedding": "sentence-transformers/all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+      "translation": "none",
+      "model_revision": null,
+      "artifact_license_verified": false,
+      "directions": {
+        "en-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-zh": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        }
+      }
+    },
+    {
+      "name": "multilingual-both",
+      "embedding": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "reranker": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+      "translation": "none",
+      "model_revision": null,
+      "artifact_license_verified": false,
+      "directions": {
+        "en-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-zh": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        }
+      }
+    },
+    {
+      "name": "translation-current",
+      "embedding": "sentence-transformers/all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "translation": "human_pretranslated",
+      "model_revision": null,
+      "artifact_license_verified": false,
+      "directions": {
+        "en-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-en": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        },
+        "zh-zh": {
+          "status": "Not measured",
+          "Recall@5": null,
+          "Recall@10": null,
+          "MRR@10": null,
+          "nDCG@10": null,
+          "latency_ms": null
+        }
+      }
+    }
+  ]
+}
